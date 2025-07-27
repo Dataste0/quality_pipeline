@@ -1,0 +1,14 @@
+*.csv
+*.log
+
+.venv/
+.vscode/
+.VSCodeCounter/
+
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+.*
+!.gitignore
