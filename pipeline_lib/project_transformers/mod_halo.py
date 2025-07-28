@@ -12,8 +12,27 @@ logger = logging.getLogger('pipeline.transform_modules')
 
 
 def halo_transform(df, stats, excluded_labels=None):
+    required_columns = ["SRT Annotator ID", "Time (PT)", "SRT Job ID", "Vendor Auditor ID", "Vendor Tag", "Vendor Comment"]
+
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        logger.error(f"Halo Module: missing required cols")
+        stats["missing_required_cols": "true"]
+
+    df_selected = df[[col for col in required_columns if col in df.columns]].copy()
+
+    if "Rubric Name" in df.columns:
+        df_selected["Rubric Name"] = df["Rubric Name"]
+    elif "Queue Name" in df.columns:
+        df_selected["Rubric Name"] = df["Queue Name"]
+    else:
+        df_selected["Rubric Name"] = ""
+    final_columns = required_columns + ["Rubric Name"]
+
+    
+
     # Select relevant columns only
-    df = df[["SRT Annotator ID", "Time (PT)", "SRT Job ID", "Rubric Name", "Vendor Auditor ID", "Vendor Tag", "Vendor Comment"]].copy()
+    df = df_selected[final_columns].copy()
 
     # Rename columns
     df.rename(columns={

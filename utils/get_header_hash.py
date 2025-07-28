@@ -8,9 +8,9 @@ import pipeline_lib.config as cfg
 
 FILEPATH = os.path.join(
     cfg.RAWDATA_ROOT_PATH, 
-    "a01TR00000Eb8KKYAZ_Image Generation Human Flaw Understanding", 
-    "WE 2025.07.11", 
-    "WE0711 Image Generation Human Flaw Raw Data.xlsx"
+    "a0ATR000001slqz2AA_Concept relation annotation", 
+    "WE 2025.07.04", 
+    "An9CMg6VK0rInYnzFLEfB8mrr49b17uT3iq04q2ydhqW1Z87pJNMxKlTVxB-DZY5Fha0PhmP7SxSU4_a7cE8AwVKZxHRCcueGKDDFwyclf5B2YU (1).csv"
 )
 
 def main():
