@@ -193,7 +193,7 @@ def scan_rawdata_project_folder(
         if not filtered_snapshot.empty:
             snapshot_row = filtered_snapshot.iloc[0].copy()
         else:
-            snapshot_row = {}
+            snapshot_row = pd.Series(dtype='object')
 
         result = scan_rawdata_week_folder(
             project_id=project_id,
