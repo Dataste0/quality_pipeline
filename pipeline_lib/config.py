@@ -9,7 +9,7 @@ RAWDATA_ROOT_PATH
     ...
     └── WE <yyyy.mm.dd>
 """
-RAWDATA_ROOT_PATH = "/mnt/c/Users/steco/Appen/Appen Quality Team - Projects Raw Data"
+RAWDATA_ROOT_PATH = "/mnt/c/rawdata"
 
 
 # Pipeline Directory Tree
@@ -42,7 +42,7 @@ PIPELINE_ROOT_PATH
     ├── project_masterfile.xlsx (*)
     └── snapshot_rawdata_folders.csv (*)
 """
-PIPELINE_ROOT_PATH = "/mnt/c/Users/steco/Appen/Appen Quality Team - Dashboard"
+PIPELINE_ROOT_PATH = "/mnt/c/dashboard"
 
 DATA_PROCESS_DIR = "Data_Process"
 DATA_QUEUES_DIR = "queues"

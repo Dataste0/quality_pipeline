@@ -1,5 +1,5 @@
 ###################
-# Project 'Churchill Price and Availability'
+# Project 'Churchill Correctness - Media'
 ###################
 
 import pandas as pd
@@ -30,6 +30,8 @@ def adhoc_transform(df, reporting_week, excluded_labels=None):
     # Filter excluded labels
     if excluded_labels:
         df_filtered = df[~df['parent_label'].isin(excluded_labels)]
+    else:
+        df_filtered = df
 
     return df_filtered.copy()
 

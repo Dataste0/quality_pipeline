@@ -48,7 +48,8 @@ def process_file(raw_file_path, project_id, metadata_str, data_week):
         
         metadata = json.loads(metadata_str)
 
-        logger.debug(f"Processing file: {raw_file_path} - Json: {metadata_str}")
+        metadata_str_clean = metadata_str.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
+        logger.debug(f"Processing file: {raw_file_path} - Json: {metadata_str_clean}")
         #print(f"Processing file: {raw_file_path} - Json: {metadata_str} - Output: {output_path}")
 
         if metadata.get("use_reporting_data") is True:
