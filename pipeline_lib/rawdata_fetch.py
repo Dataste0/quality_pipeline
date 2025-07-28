@@ -190,7 +190,10 @@ def scan_rawdata_project_folder(
             (last_snapshot['data_week'] == we_date) &
             (last_snapshot['project_id'] == project_id)
         ]
-        snapshot_row = filtered_snapshot.iloc[0].copy()
+        if not filtered_snapshot.empty:
+            snapshot_row = filtered_snapshot.iloc[0].copy()
+        else:
+            snapshot_row = {}
 
         result = scan_rawdata_week_folder(
             project_id=project_id,
