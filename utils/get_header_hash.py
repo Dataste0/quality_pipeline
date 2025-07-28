@@ -6,12 +6,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from pipeline_lib.pipeline_utils import hash_header
 import pipeline_lib.config as cfg
 
-FILEPATH = os.path.join(
-    cfg.RAWDATA_ROOT_PATH, 
-    "a0ATR000001slqz2AA_Concept relation annotation", 
-    "WE 2025.07.04", 
-    "An9CMg6VK0rInYnzFLEfB8mrr49b17uT3iq04q2ydhqW1Z87pJNMxKlTVxB-DZY5Fha0PhmP7SxSU4_a7cE8AwVKZxHRCcueGKDDFwyclf5B2YU (1).csv"
-)
+FILEPATH = os.path.join(cfg.RAWDATA_ROOT_PATH, "a01Hs00001q1a2WIAQ_Crawling Structured Description", "WE 2025.04.18", "annotation_structured_description_all_last_day_audits_2025-04-14.csv")
 
 def main():
     
