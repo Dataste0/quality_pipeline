@@ -178,11 +178,21 @@ def get_project_methodology(project_id, project_list):
 # DATES
 
 def get_friday_of_week(date):
-    date = pd.to_datetime(date)
-    weekday = date.weekday()  # 0=Mon, ..., 6=Sun
-    custom_weekday = (weekday + 2) % 7
-    days_to_friday = (6 - custom_weekday) % 7
-    return date + timedelta(days=days_to_friday)
+    try:
+        date = pd.to_datetime(date, errors='coerce')
+
+        if pd.isna(date):
+            raise ValueError("Invalid or missing date")
+
+        weekday = date.weekday()  # 0=Mon, ..., 6=Sun
+        custom_weekday = (weekday + 2) % 7
+        days_to_friday = (6 - custom_weekday) % 7
+
+        return date + timedelta(days=days_to_friday)
+
+    except Exception as e:
+        print(f"get_friday_of_week: invalid input '{date}' — {e}")
+        return pd.NaT
 
 def generate_we_dates(start_date, end_date=None):
     first_friday = get_friday_of_week(start_date)

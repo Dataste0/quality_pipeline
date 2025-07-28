@@ -17,7 +17,7 @@ def setup_logging():
 
     if not any(isinstance(h, logging.FileHandler) and h.baseFilename.endswith("pipeline.log")
                for h in root_logger.handlers):
-        general_handler = logging.FileHandler(os.path.join(LOG_DIR, "pipeline.log"))
+        general_handler = logging.FileHandler(os.path.join(LOG_DIR, "pipeline.log"), encoding="utf-8")
         general_handler.setFormatter(formatter)
         root_logger.addHandler(general_handler)
 
@@ -27,6 +27,6 @@ def setup_logging():
         logger.propagate = False
 
         if not logger.handlers:
-            handler = logging.FileHandler(os.path.join(LOG_DIR, f"{component}.log"))
+            handler = logging.FileHandler(os.path.join(LOG_DIR, f"{component}.log"), encoding="utf-8")
             handler.setFormatter(formatter)
             logger.addHandler(handler)
