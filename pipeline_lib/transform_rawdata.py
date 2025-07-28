@@ -51,6 +51,11 @@ def process_file(raw_file_path, project_id, metadata_str, data_week):
         logger.debug(f"Processing file: {raw_file_path} - Json: {metadata_str}")
         #print(f"Processing file: {raw_file_path} - Json: {metadata_str} - Output: {output_path}")
 
+        if metadata.get("use_reporting_data") is True:
+            reporting_week = data_week
+            metadata["reporting_week"] = data_week
+            logger.debug(f"'use_reporting_data' is True – setting 'reporting_week' to {reporting_week}")
+
         df_transformed, transformed_info = process_dataframe(df, metadata)
 
         if df_transformed.empty:
