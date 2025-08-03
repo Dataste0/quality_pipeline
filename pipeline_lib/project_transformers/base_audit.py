@@ -73,8 +73,6 @@ def base_audit_etl(df, stats, base_config):
     try:
         label_dicts = base_config.get("labels", [])
 
-        print(f"DEBUG BASE AUDIT STARTED - {base_config}")
-        
         # Map label columns
         label_column_map = {}
         for v in label_dicts:
@@ -101,27 +99,29 @@ def base_audit_etl(df, stats, base_config):
 
         df_long[["parent_label", "role"]] = df_long["label_role"].str.rsplit("|", n=1, expand=True)
 
-        df_wide = (
-            df_long
-            .pivot_table(
-                index=info_columns + ["parent_label"],
-                columns="role",
-                values="response",
-                aggfunc="first",
-                dropna=False
-            )
-            .reset_index()
+        df_long = df_long.drop(columns=["label_role"], errors="ignore")
+
+        # Split
+        rater_df = df_long[df_long["role"] == "rater"].copy()
+        auditor_df = df_long[df_long["role"] == "auditor"].copy()
+
+        rater_df = rater_df.rename(columns={"response": "rater_response"})
+        auditor_df = auditor_df.rename(columns={"response": "auditor_response"})
+
+        key_cols = info_columns + ["parent_label"]
+        rater_df = rater_df[key_cols + ["rater_response"]]
+        auditor_df = auditor_df[key_cols + ["auditor_response"]]
+
+        
+        # Recombine
+        df_wide = pd.merge(
+            rater_df,
+            auditor_df,
+            on=key_cols,
+            how="left"  # o "left" se sai che rater c'è sempre
         )
-        df_wide.columns.name = None
-        df_wide = df_wide.rename(columns={"rater": "rater_response", "auditor": "auditor_response"})
-
-        for col in ["rater_response", "auditor_response"]:
-            if col not in df_wide:
-                df_wide[col] = pd.NA
-
+    
         df = df_wide
-        df.to_csv('test_audit_base.csv', index=False)
-
 
 
         # Map binary
@@ -141,13 +141,14 @@ def base_audit_etl(df, stats, base_config):
         expected_pos = df["parent_label"].map(pos_value_map)
         df["is_positive"] = (df["rater_response"] == expected_pos).where(df["is_label_binary"]).astype("boolean")
 
+        
         weight_map = {
-            d["label_name"]: int(d["weight"]) if d.get("weight") is not None else 1
+            d["label_name"]: (int(d["weight"]) if isinstance(d.get("weight"), (int, float)) \
+                              or (isinstance(d.get("weight"), str) and d["weight"].strip().isdigit()) else 1)
             for d in label_dicts
             if "label_name" in d
         }
         df["weight"] = df["parent_label"].map(weight_map).fillna(1).astype(int)
-
 
 
 
@@ -186,7 +187,6 @@ def base_audit_etl(df, stats, base_config):
 
 
 
-
         # Confusion type
         is_binary = df["is_label_binary"] == True  # bool mask
         is_positive = df["is_positive"] == True
@@ -220,7 +220,13 @@ def base_audit_etl(df, stats, base_config):
         df["confusion_type"] = pd.Series(confusion, index=df.index)
 
 
+        final_cols = info_columns + \
+            ["parent_label", "rater_response", "auditor_response", "is_label_binary", "is_positive", "weight", "is_correct", "confusion_type"]
+        df = df[final_cols]
+        
+        return df
 
+        """
         # Calculate final job score
         df["weighted_correct"] = df["weight"] * df["is_correct"].astype("boolean").fillna(False).astype(int)
         group_cols = ["job_id", "rater_id", "auditor_id"]
@@ -240,15 +246,16 @@ def base_audit_etl(df, stats, base_config):
         df["final_job_score"] = num / den
         df.drop(columns="weighted_correct", inplace=True)
 
-        df.to_csv('test_audit_mio.csv')
-        return df
+        df.to_csv('test_audit_finale.csv')
+        """
+        
 
     except Exception as e:
         tb = traceback.format_exc()
         stats["transform_error"] = f"Unexpected error: {e}"
         print(f"BASE AUDIT MODULE ERROR: Unexpected error: {e}\n{tb}")
         return None
-
+        
 
 
 
