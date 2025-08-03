@@ -1,5 +1,6 @@
 *.csv
 *.log
+.env.local
 
 .venv/
 .vscode/

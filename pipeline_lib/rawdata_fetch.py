@@ -3,6 +3,7 @@ import pandas as pd
 import re
 import ast
 import logging
+import json
 import pipeline_lib.pipeline_utils as pu
 from pipeline_lib.queues import SnapshotManager, TransformationQueueManager
 import pipeline_lib.config as cfg
@@ -31,9 +32,7 @@ def scan_rawdata_week_folder(
     project_id,
     project_name,
     project_is_active,
-    file_pattern,
-    header_hash,
-    regex,
+    project_config_list,
     data_week,
     raw_data_root,
     last_snapshot,
@@ -60,6 +59,7 @@ def scan_rawdata_week_folder(
     #print(f"Directory Fast hash ready: {directory_hash} - Previous hash: {last_snapshot['folder_hash']}")
 
     if not last_snapshot.empty and last_snapshot["folder_hash"] == directory_hash:
+        #print("Weelky folder hash match. No changes made.")
         logger.debug(f"Weekly Folder matches previous status. No changes made. {project_id} ({project_name}) {folder_name}")
         return {
             "project_id": project_id,
@@ -74,43 +74,66 @@ def scan_rawdata_week_folder(
             "valid_files_list": last_snapshot['valid_files_list']
         }
     
+    #print(f"Weekly Folder doesnt match previous hash. Checking folder content... {project_id} ({project_name}) {folder_name}")
     logger.info(f"Weekly Folder doesnt match previous hash. Checking folder content... {project_id} ({project_name}) {folder_name}")
     try:
         # Consider only non-empty CSV/Excel files with at least one data row
         allowed_exts = ('.csv', '.xls', '.xlsx')
-        files = [
+        files_available = [
             f for f in os.listdir(folder_path)
             if f.lower().endswith(allowed_exts)
             and os.path.getsize(os.path.join(folder_path, f)) > 0
             and pu.has_at_least_one_data_row(os.path.join(folder_path, f))
         ]
 
-        if not files:
+        if not files_available:
             logger.debug(f"Empty folder: {folder_path}")
 
-        file_info_list = []
-        for f in sorted(files):
+
+        file_existing_list = []
+        
+        for f in sorted(files_available):
+            
             full_path = os.path.join(folder_path, f)
-            try:
-                header_value = pu.hash_header(full_path)
-                file_hash = pu.hash_file(full_path)
-                file_info_list.append({
-                    "filename": f,
-                    "hash": file_hash,
-                    "format": "ok" if header_value == header_hash else "invalid"
-                })
-            except Exception as e:
-                logger.error(f"Cannot hash file {f}: {e}")
+            file_hash = None
+            regex_matched = False
+            format_ok = False
+
+            for item in project_config_list:
+                item_regex = item['files_filter_regex']
+                item_pattern = item['files_filter_pattern']
+                if item_regex is None:
+                    continue
+                
+                if item_regex.match(f):
+                    regex_matched = True
+                    dataset_fingerprint = item.get("dataset_fingerprint")
+                    header_computed = pu.hash_header(full_path)
+                    format_ok = header_computed == dataset_fingerprint
+
+                    file_hash = pu.hash_file(full_path)
+                    # trovato il primo match: esci dal loop degli item
+                    break
+            
+            logger.debug(f"File {f} - Regex match: {regex_matched} - Format OK: {format_ok}")
+                         
+            file_existing_list.append({
+                "filename": f,
+                "hash": file_hash,
+                "naming_filter" : "match" if regex_matched else "no_match",
+                "dataset_fingerprint": "match" if format_ok else "no_match"
+            })
+
 
         matching_files = [
-            info for info in file_info_list
-            if regex.match(info["filename"]) and info["format"] == "ok"
+            info for info in file_existing_list
+            if info["naming_filter"] == "match" and info["dataset_fingerprint"] == "match"
         ]
 
-        if file_info_list and not matching_files:
+        if file_existing_list and not matching_files:
             logger.warning(
                 f"No valid matches in {project_id} ({project_name}) {folder_name} | "
-                f"Files: {[f['filename'] for f in file_info_list]} | Pattern: {file_pattern}"
+                f"Files: {[f['filename'] for f in file_existing_list]}"
             )
 
         logger.debug(f"Weekly folder scan complete for {project_id} ({project_name}).")
@@ -120,15 +143,16 @@ def scan_rawdata_week_folder(
             "project_name": project_name,
             "data_week": data_week,
             "folder_hash": directory_hash,
-            "has_any_data": bool(file_info_list),
+            "has_any_data": bool(file_existing_list),
             "has_weekly_data": bool(matching_files),
-            "file_number": len(file_info_list),
-            "file_list": file_info_list,
+            "file_number": len(file_existing_list),
+            "file_list": file_existing_list,
             "valid_files_number": len(matching_files),
             "valid_files_list": matching_files
         }
 
     except Exception as e:
+        print(f"Access denied to {project_id} ({project_name}) {folder_name}: {e}")
         logger.error(f"Access denied to {project_id} ({project_name}) {folder_name}: {e}")
         return None
 
@@ -141,8 +165,7 @@ def scan_rawdata_project_folder(
     project_folder_name,
     project_start_date,
     project_end_date,
-    file_pattern,
-    header_hash,
+    project_metadata,
     raw_data_root,
     last_snapshot,
     create_missing
@@ -152,18 +175,29 @@ def scan_rawdata_project_folder(
         f"Scanning project folder: {project_name} | create_missing={create_missing}, hash={hash}"
     )
 
+    metadata_dict = json.loads(project_metadata)
+    project_config_list = metadata_dict.get("project_config", [])
     scan_log = []
+    
 
-    # Validate file pattern
-    if not isinstance(file_pattern, str) or not file_pattern.strip():
-        logger.warning(f"No file_pattern defined for {project_id} ({project_name}). Using wildcard.")
-        file_pattern = ".*"
+    for item in project_config_list:
+        file_pattern_dict = item.get("files_filter", {})
+        file_pattern_flat = pu.extract_file_pattern(file_pattern_dict)
 
-    try:
-        regex = re.compile(file_pattern)
-    except re.error:
-        logger.warning(f"Invalid regex for {project_id} ({project_name}). Skipping project.")
-        return []
+        # Validate file pattern
+        if not isinstance(file_pattern_flat, str) or not file_pattern_flat.strip():
+            logger.warning(f"No file_pattern defined for {project_id} ({project_name}). Using wildcard ALL files.")
+            file_pattern_flat = ".*"
+
+        try:
+            regex = re.compile(file_pattern_flat)
+        except re.error:
+            logger.warning(f"Invalid regex for {project_id} ({project_name})")
+            return None
+        
+        item['files_filter_regex'] = regex
+        item['files_filter_pattern'] = file_pattern_flat
+        
 
     project_folder_info = pu.get_project_folder(project_id, raw_data_root)
 
@@ -199,9 +233,7 @@ def scan_rawdata_project_folder(
             project_id=project_id,
             project_name=project_name,
             project_is_active=project_is_active,
-            file_pattern=file_pattern,
-            header_hash=header_hash,
-            regex=regex,
+            project_config_list=project_config_list,
             data_week=we_date,
             raw_data_root=raw_data_root,
             last_snapshot=snapshot_row,
@@ -218,6 +250,7 @@ def scan_rawdata_project_folder(
 # --- Scans all projects in Project List (Generates: current Snapshot)
 def scan_rawdata(project_df, raw_data_root, last_snapshot, create_missing):
     logger.debug("Starting scan of rawdata folders.")
+    project_df.to_csv('miotest.csv')
 
     if not os.path.exists(raw_data_root):
         logger.error(f"Raw data root folder not found: {raw_data_root}. Aborting.")
@@ -230,11 +263,10 @@ def scan_rawdata(project_df, raw_data_root, last_snapshot, create_missing):
             project_id=row["project_id"],
             project_name=row["project_name"],
             project_is_active=row["project_is_active"],
-            project_folder_name=row["project_folder_name"],
+            project_folder_name=row["raw_folder_name"],
             project_start_date=row["project_start_date"],
             project_end_date=row["project_end_date"],
-            file_pattern=row.get("file_pattern"),
-            header_hash=row.get("header_hash"),
+            project_metadata=row['project_metadata'],
             raw_data_root=raw_data_root,
             last_snapshot=last_snapshot,
             create_missing=create_missing

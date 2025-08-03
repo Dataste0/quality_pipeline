@@ -1,5 +1,5 @@
 ###################
-# Halo Admin Project Transformer
+# Generic Project Transformer
 ###################
 
 import pandas as pd
@@ -12,54 +12,82 @@ import logging
 logger = logging.getLogger('pipeline.transform_modules')
 
 
-# Halo Default Columns
-HALO_RATER_ID_COL_NAME = "SRT Annotator ID"
-HALO_AUDITOR_ID_COL_NAME = "Vendor Auditor ID"
-HALO_JOB_ID_COL_NAME = "SRT Job ID"
-HALO_JOB_DATE_COL_NAME = "Time (PT)"
-HALO_WORKFLOW_COL_NAME = "Rubric Name"
-HALO_VENDOR_TAG_COL = "Vendor Tag"
-HALO_VENDOR_COMMENT_COL = "Vendor Comment"
-HALO_VENDOR_SCORE_COL = "Vendor Manual QA Score"
+# Tipicamente Halo
+"""
+definire singolarmente label e colonne: rater (colonne answer)
+auditor (colonne answer/agreement/disagreement)
+colonna outcome (definire valore correct/incorrect) se blank è non audited
+definire score o penalty
+"""
 
 
-def halo_transform(df, stats, mod_config):
+def generic_transform(df, stats, mod_config):
     """
     MOD-CONFIG DICTIONARY FORMAT
 
     mod_config = {
-              "info_columns": {
-                  "rater_id_column": "Annotator ID",
-                  "auditor_id_column": "Vendor Auditor ID",
-                  "job_id_column": "SRT Job ID",
-                  "submission_date_column": "Time (PT)",
-                  "workflow_column": "Rubric Name",
-                  "vendor_tag_column": "Vendor Tag",
-                  "vendor_comment_column": "Vendor Comment",
-                  "manual_score_column": "Vendor Manual QA Score"
-              },
+        "info_columns": {
+            "rater_id_column": "Annotator ID",
+            "auditor_id_column": "Vendor Auditor ID",
+            "job_id_column": "SRT Job ID",
+            "submission_date_column": "Time (PT)",
+            "workflow_column": "Rubric Name",
+        },
 
-              "top_score": 100,
-              "bottom_score": 80,
-              "default_rubric_name": "main_rubric",
-              "use_job_score_provided": true,
-              "use_job_outcome_provided": false,
-              "pass_score": 100,
-              "incorrect_if_commented": true,
+        "job_outcome": {
+            # This column must have job_outcome_positive value for Pass or job_outcome_negative for Fail
+            "job_outcome_column": "Vendor Tag",
+            "job_outcome_type": "pass" / "fail",
+            "pass_value": "YES",
+            "pass_if_not_empty": True
+            #"fail_value": "NO",
+            #"fail_if_not_empty": False
+        }
+
+        "audited": {
+            # This column must be not-empty to determine if the job is audited
+            "audited_column": "Vendor Tag"
+            "audited_if_not_empty": True
+            # "audited_value":
+        }
+
+        "provided_score": {
+            "use_provided_score": True,
+            "provided_score_column": "column_name"
+        }
+
+        "top_score": 100,
+        "bottom_score": 80,
+        "default_label_name": "main_rubric",
+        "use_job_score_provided": true,
+        "use_job_outcome_provided": false,
+        "pass_score": 100,
+        "incorrect_if_commented": true,
               
-              "rubric": [
-                  {
-                      "rubric_column" : "Conditions - Incorrect", 
-                      "rubric_name" : "conditions_incorrect",
-                      "penalty_score": 5
-                  },
-                  {
-                      "rubric_column" : "Can Promotion Be Applied - Incorrect", 
-                      "rubric_name" : "can_promotions_be_applied_incorrect",
-                      "penalty_score": 5
-                  }
-              ]
-          }
+        "labels": [
+            {
+                "label_name": "able_to_eval",
+                "rater_label_column": "r_able_to_eval", 
+                "auditor_label_column": "a_able_to_eval",
+                "auditor_column_type": "answer", #"answer/disagreement/agreement",
+                "agreement": {
+                    "agreement_value":
+                },
+                "disagreement": {},
+                "is_label_binary": true,
+                "label_binary_pos_value": "EB_yes",
+                "weight": null
+            },
+            {
+                "label_name": "withhold",
+                "rater_label_column": "r_withhold", 
+                "auditor_label_column": "a_withhold",
+                "auditor_column_type": "answer",
+                "is_label_binary": false,
+                "weight": null
+            }
+        ]
+    }
     """
 
     info = mod_config.get("info_columns", None)
@@ -124,15 +152,15 @@ def halo_transform(df, stats, mod_config):
         if not isinstance(v, dict):
             logging.debug("Skipping non-dict rubric item: %r", v)
             continue
-        rubric_col = v.get("rubric_column")
-        rubric_name = v.get("rubric_name")
-        rubric_col_map[rubric_col] = f"rb_{rubric_name}"
+        label_col = v.get("label_column")
+        label_name = v.get("label_name")
+        rubric_col_map[label_col] = f"rb_{label_name}"
     
     rub_valid_map = {src: dst for src, dst in rubric_col_map.items() if src in df.columns} # safely rename only existing columns
     df.rename(columns=rub_valid_map, inplace=True)
 
     # Saving rubric list
-    stats["rubric_list"] = [r.get("rubric_name") for r in rubric_list_items]
+    stats["rubric_list"] = [r.get("label_name") for r in rubric_list_items]
 
 
     
@@ -159,12 +187,12 @@ def halo_transform(df, stats, mod_config):
         df["job_score"] = pd.to_numeric(df["vendor_score"], errors="coerce") / 100
 
     else:
-        #Building map rubric_column -> penalty_score
+        #Building map label_column -> penalty_score
         rubric_items = mod_config.get("rubric", []) or []
         penalty_map = {
-            v["rubric_column"]: float(v.get("penalty_score", v.get("penalty", 0))) / 100.0
+            v["label_column"]: float(v.get("penalty_score", v.get("penalty", 0))) / 100.0
             for v in rubric_items
-            if "rubric_column" in v
+            if "label_column" in v
         }
         valid_cols = [col for col in rub_col_list if col in penalty_map]
         if valid_cols:
@@ -259,19 +287,19 @@ def transform(df, module_info):
 
     # Crea BASE CONFIG per BASE RUBRIC
     rubric_list = mod_config.get("rubric", [])
-    default_rubric_name = mod_config.get("default_rubric_name", "default_rubric")
+    default_label_name = mod_config.get("default_label_name", None)
     top_score = mod_config.get("top_score", 100)
 
     base_config = {
         "rubric": [
             {
-                "rubric_name": rubric['rubric_name'],
-                "rubric_column": f"rb_{rubric['rubric_name']}",
-                "penalty_score": rubric['penalty_score']
+                "rubric_name": rubric,
+                "rubric_column": f"rb_{rubric}",
+                "penalty_score": 5
             }
             for rubric in rubric_list if rubric["rubric_name"] in stats.get("rubric_list", [])
         ],
-        "default_rubric_name": default_rubric_name,
+        "default_label_name": default_label_name,
         "top_score": top_score
     }
 

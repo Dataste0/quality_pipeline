@@ -6,7 +6,7 @@ import ast
 import pipeline_lib.config as cfg
 import pipeline_lib.pipeline_utils as pu
 from pipeline_lib.queues import TransformationQueueManager
-from pipeline_lib.etl.queryrun import query_run
+from pipeline_lib.sql.queryrun import query_run
 
 OLAP_BASE_FOLDER = cfg.OLAP_EXPORT_DIR_PATH
 
@@ -60,7 +60,7 @@ def olap_sync():
         target = pu.get_project_target(project_id, project_list_df)
         methodology = pu.get_project_methodology(project_id, project_list_df)
 
-        #print(f"\nTarget: {target} - Methodology: {methodology}")
+        print(f"\nTarget: {target} - Methodology: {methodology}")
         
         content_weeks = ast.literal_eval(olap_sync_item['content_weeks'])
         failed = 0

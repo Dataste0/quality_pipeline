@@ -1,4 +1,12 @@
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+env_path = Path("folderpath.env.local")
+load_dotenv(dotenv_path=env_path)
+
+RAWDATA_ROOT_PATH = os.getenv("RAWDATA_ROOT_PATH")
+PIPELINE_ROOT_PATH = os.getenv("PIPELINE_ROOT_PATH")
 
 # RawData Directory Tree
 """
@@ -9,8 +17,6 @@ RAWDATA_ROOT_PATH
     ...
     └── WE <yyyy.mm.dd>
 """
-RAWDATA_ROOT_PATH = "/mnt/c/rawdata"
-
 
 # Pipeline Directory Tree
 """
@@ -20,29 +26,23 @@ PIPELINE_ROOT_PATH
 │   └── logs
 |
 ├── Data_Transformed
-|   ├── CSV
-│   |   ├── Transformed_<projectid-1>
-|   |   |   └── <yyyy-mm-dd>
-|   |   |       └── <projectid-1>_<yyyy-mm-dd>_<string>_UQ.csv
-|   |   └── ...
 |   └── Parquet
-│       ├── Parq_<projectid-1>
+│       ├── <projectid-1>_<project-name-1>
 |       |   └── <yyyy-mm-dd>
 |       |       ├── <projectid-1>_<yyyy-mm-dd>_<string>_C<yyyymmdd>.parquet
 |       |       └── <projectid-1>_<yyyy-mm-dd>_<string>_C<yyyymmdd>.parquet
 |       └── ...
 |
 └── OLAP_Export
-    ├── Project_<projectid-1>
+    ├── <projectid-1>_<project-name-1>
     │   ├── <yyyy-mm-dd>
     │   ...
     │   └── <yyyy-mm-dd>
     ...
-    ├── Project_<projectid-n>
+    ├── <projectid-n>_<project-name-n>
     ├── project_masterfile.xlsx (*)
     └── snapshot_rawdata_folders.csv (*)
 """
-PIPELINE_ROOT_PATH = "/mnt/c/dashboard"
 
 DATA_PROCESS_DIR = "Data_Process"
 DATA_QUEUES_DIR = "queues"
@@ -51,11 +51,10 @@ DATA_LOG_DIR_PATH = os.path.join(PIPELINE_ROOT_PATH, DATA_PROCESS_DIR, DATA_LOG_
 
 DATA_TRANSFORMED_DIR = "Data_Transformed"
 DATA_TRANSFORMED_DIR_PATH = os.path.join(PIPELINE_ROOT_PATH, DATA_TRANSFORMED_DIR)
-CSV_DIR = "CSV"
 PARQUET_DIR = "Parquet"
 DATA_PARQUET_DIR_PATH = os.path.join(DATA_TRANSFORMED_DIR_PATH, PARQUET_DIR)
 
-OLAP_DIR = "OLAP_Export"
+OLAP_DIR = "OLAP_Export_New"
 OLAP_EXPORT_DIR_PATH = os.path.join(PIPELINE_ROOT_PATH, OLAP_DIR)
 
 

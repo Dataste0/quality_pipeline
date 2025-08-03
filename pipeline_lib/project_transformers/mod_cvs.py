@@ -2,10 +2,23 @@ import pandas as pd
 import json
 import logging
 from pipeline_lib.project_transformers import transformer_utils
+from pipeline_lib.project_transformers.base_audit import base_transform as baudit
 
 # --- Setup logger
 logger = logging.getLogger('pipeline.transform_modules')
 
+
+# CVS Default Columns
+CVS_RATER_ID_COL_NAME = "rater_id"
+CVS_AUDITOR_ID_COL_NAME = "quality_actor_id"
+CVS_JOB_ID_COL_NAME = "entity_id"
+CVS_SUBMISSION_DATE_COL_NAME = "sample_ds"
+CVS_WORKFLOW_COL_NAME = "routing_name"
+CVS_RATER_DECISION_DATA_COL_NAME = "rater_decision_data"
+CVS_AUDITOR_DECISION_DATA_COL_NAME = "auditor_decision_data"
+
+# Output to BASE AUDIT
+# [workflow, job_date, rater_id, auditor_id, job_id] [r_label1, a_label1] [r_label2, a_label2] ...
 
 
 # Extract labels to a list from JSON string
@@ -63,151 +76,109 @@ def CVS_extract_labels(json_str):
         return None
 
 
-# Filter out excluded labels
-def CVS_filter_labels(label_list, excluded_list):
-    if not isinstance(label_list, list):
-        logging.error(f"Filter Labels - Expected a list of labels, got: {label_list}")
-        return None
-
-    return [item for item in label_list if item.split("::")[0] not in excluded_list]
 
 
+def expand_label_columns(df, label_col, prefix, excluded_list=None):
+    excluded_set = set(x.strip().lower() for x in (excluded_list or []))
+    tmp = df[[label_col]].copy()
+    tmp[label_col] = tmp[label_col].apply(lambda x: x if isinstance(x, list) else [])
+    exploded = tmp.explode(label_col).reset_index()  # mantiene indice originale
 
-# Compute confusion type for rater_labels
-def CVS_compute_confusion_type(rater_labels, auditor_labels, binary_labels):
-    if not isinstance(rater_labels, list) or not isinstance(auditor_labels, list):
-        logging.error(f"Compute Confusion - Format error: expected list. Rater labels: {rater_labels}. Auditor labels: {auditor_labels}")
-        return None
+    def split_kv(s):
+        if not isinstance(s, str) or "::" not in s:
+            return pd.Series({f"{prefix}_key": None, f"{prefix}_value": None})
+        k, v = s.split("::", 1)
+        k_clean = k.strip().lower()
+        return pd.Series({f"{prefix}_key": k_clean, f"{prefix}_value": v})
 
-    updated_labels = []
-    for label in rater_labels:
-        key_value = label.split("::")
-        if len(key_value) == 2:
-            key, value = key_value
+    kv = exploded[label_col].apply(split_kv)
+    exploded = pd.concat([exploded, kv], axis=1)
 
-            if key in binary_labels:
-                pos_val = binary_labels[key]["positive_value"].lower()
+    # scarta le key escluse (senza prefisso: qui è solo 'quality', 'speed', ecc.)
+    exploded = exploded[~exploded[f"{prefix}_key"].isin(excluded_set)]
 
-                auditor_value = next((aud_label.split("::")[1] for aud_label in auditor_labels if aud_label.startswith(f"{key}::")), None)
-
-                # Compute confusion type
-                rater_lower = value.lower()
-                auditor_lower = auditor_value.lower() if auditor_value else ""
-
-                if pos_val in auditor_lower:
-                    confusion_type = "TP" if pos_val in rater_lower else "FN"
-                else:
-                    confusion_type = "FP" if pos_val in rater_lower else "TN"
-
-                # Append confusion type
-                updated_labels.append(f"{key}::{value}|{confusion_type}")
-            else:
-                updated_labels.append(label)  # Keep as is if not in binary_labels
-        else:
-            logging.error(f"Compute Confusion - Incorrect format")
-            return None
-    return updated_labels
-
-
-# Drop duplicates
-def CVS_drop_dupes(df, grouped_columns, aggregated_columns):
-    # Mask to exclude rows with NaN or empty strings in - at least - 1 of the selected_columns
-    mask = df[aggregated_columns].notna().all(axis=1) & (df[aggregated_columns] != "").all(axis=1)
-    df_clean = df[mask]
-    # Removes dupes
-    df_deduped = df_clean.drop_duplicates(subset=grouped_columns, keep='first')
-    return df_deduped[grouped_columns + aggregated_columns]
-
-
-# Explode labels
-def CVS_unpivot_labels(df, role):
-    labels_col = f"{role}_labels"
-
-    # Explode the labels list into separate rows
-    df_exploded = df.explode(labels_col).dropna(subset=[labels_col])
-
-    # Extract attribute (label key) and value
-    df_exploded["label_name"], df_exploded["label_response"] = zip(*df_exploded[labels_col].apply(lambda x: x.split("::", 1) if "::" in x else (x, None)))
-
-    # Split confusion type from value
-    df_exploded["label_response"], df_exploded["confusion_type"] = zip(*df_exploded["label_response"].apply(lambda x: x.split("|", 1) if "|" in x else (x, None)))
-
-    # Drop the original labels column
-    df_exploded = df_exploded.drop(columns=[labels_col])
-
-    df_exploded["confusion_type"] = df_exploded["confusion_type"].fillna("")
-
-    df_exploded["is_audit"] = 1 if role == "auditor" else 0
-    df_exploded["source_of_truth"] = 1 if role == 'golden' else 0
-
-    return df_exploded
-
-# Bulk rename columns
-def CVS_bulk_rename_to_universal_format(df):
-    rename_dict = {
-        "rater_id"            : "actor_id",
-        "auditor_id"          : "actor_id",
-        "quality_actor_id"    : "actor_id",
-        "routing_name"        : "workflow",
-
-        "review_ds"           : "submission_date",
-        "sample_ds"           : "submission_date",
-
-        "entity_id"           : "job_id",
-
-        "label_name"          : "parent_label",
-        "label_response"      : "response_data",
-        "confusion_type"      : "recall_precision"
-    }
-    existing_renames = {k: v for k, v in rename_dict.items() if k in df.columns}
-    return df.rename(columns=existing_renames)
+    pivoted = (
+        exploded
+        .dropna(subset=[f"{prefix}_key"])
+        .pivot_table(
+            index=exploded["index"],
+            columns=f"{prefix}_key",
+            values=f"{prefix}_value",
+            aggfunc=lambda x: x.iloc[0] if len(x) else None,
+        )
+    )
+    pivoted.columns = [f"{prefix}_{col}" for col in pivoted.columns]
+    pivoted = pivoted.reindex(df.index, fill_value=None)
+    return pivoted
 
 
 
-def CVS_transform(df, stats, binary_labels, excluded_labels):
+
+def CVS_transform(df, stats, mod_config):
+    """
+    "module_config": {
+              "excluded_labels": [],
+              "binary_labels": [
+                  {
+                    "label_name": "withhold",
+                    "binary_positive_value": "yes"
+                  },
+                  {
+                    "label_name": "exaggeration",
+                    "binary_positive_value": "yes"
+                  }
+              ]
+          }      
+    """
+
+    quality_methodology = mod_config.get("quality_methodology", None)
+    excluded_list = mod_config.get("excluded_labels", [])
+    binary_labels = mod_config.get("binary_labels", [])
+    stats["quality_methodology"] = quality_methodology
+        
     # Strip initial spaces from column names
     df.columns = df.columns.str.strip()
 
-    # Fix date format and remove rows with incorrect dates
-    df['sample_ds'] = df['sample_ds'].apply(transformer_utils.convert_tricky_date)
-    stats["skipped_invalid_datetime"] = int(df['sample_ds'].isnull().sum())
-    df = df[df['sample_ds'].notnull()].copy()
+    # Map columns
+    column_map = {
+        CVS_RATER_ID_COL_NAME           : "rater_id",
+        CVS_AUDITOR_ID_COL_NAME         : "auditor_id",
+        CVS_JOB_ID_COL_NAME             : "job_id",
+        CVS_SUBMISSION_DATE_COL_NAME    : "job_date",
+        CVS_WORKFLOW_COL_NAME           : "workflow",
+        CVS_RATER_DECISION_DATA_COL_NAME : "rater_decision_data",
+        CVS_AUDITOR_DECISION_DATA_COL_NAME : "auditor_decision_data"
+    }
+    df.rename(columns=column_map, inplace=True)
 
-    # Filter out invalid sample date / empty rows
-    #df = df[df["sample_ds"].notna() & (df["sample_ds"] != "")]
-    # Convert dates
-    #df["sample_ds"] = df["sample_ds"].apply(CVS_convert_date)
+    # Fix date format and remove rows with incorrect dates
+    df["job_date"] = df["job_date"].apply(transformer_utils.convert_tricky_date)
+    stats["skipped_invalid_datetime"] = int(df["job_date"].isnull().sum())
+    df = df[df["job_date"].notnull()].copy()
 
     # Filter out combined_routing which is not used
-    df = df[df['routing_name'] != 'combined_routing']
+    df = df[df["workflow"] != 'combined_routing']
 
     # Keep only relevant columns
-    columns_to_keep = ["sample_ds", "routing_name", "entity_id", "rater_id", "rater_decision_data", "auditor_decision_data"]
+    columns_to_keep = ["job_date", "workflow", "job_id", "rater_id", "rater_decision_data", "auditor_decision_data"]
     df = df[columns_to_keep].copy()
 
     # Fix JSON separator
-    RATER_DECISION_COLUMN = "rater_decision_data"
-    AUDITOR_DECISION_COLUMN = "auditor_decision_data"
-    df[RATER_DECISION_COLUMN] = df[RATER_DECISION_COLUMN].fillna("").str.replace(";", ",")
-    df[AUDITOR_DECISION_COLUMN] = df[AUDITOR_DECISION_COLUMN].fillna("").str.replace(";", ",")
+    df["rater_decision_data"] = df["rater_decision_data"].fillna("").str.replace(";", ",")
+    df["auditor_decision_data"] = df["auditor_decision_data"].fillna("").str.replace(";", ",")
 
     # Parse Rater JSON
-    df['rater_labels'] = [CVS_extract_labels(x) for x in df[RATER_DECISION_COLUMN]]
+    df['rater_labels'] = [CVS_extract_labels(x) for x in df["rater_decision_data"]]
 
     # Parse Auditor JSON (extract auditor_id and auditor_labels if CVS)
-    parsed_auditor = [CVS_extract_labels(x) for x in df[AUDITOR_DECISION_COLUMN]]
+    parsed_auditor = [CVS_extract_labels(x) for x in df["auditor_decision_data"]]
     df["auditor_id"] = [x[0] for x in parsed_auditor]
     df["auditor_labels"] = [x[1] for x in parsed_auditor]
 
-    # Filter out Excluded labels from rater_labels and auditor_labels
-    df['rater_labels'] = df['rater_labels'].apply(CVS_filter_labels, args=(excluded_labels,))
-    df['auditor_labels'] = df['auditor_labels'].apply(CVS_filter_labels, args=(excluded_labels,))
+    df = df.drop(columns=["rater_decision_data", "auditor_decision_data"], errors="ignore")
 
-    # Compute confusion_type and concatenate it to rater binary labels in rater_labels column
-    df["rater_labels"] = [
-        CVS_compute_confusion_type(rater, auditor, binary_labels)
-        for rater, auditor in zip(df["rater_labels"], df["auditor_labels"])
-    ]
+    # Drop duplicates
+    df.drop_duplicates(subset=["rater_id", "job_id"], keep="last", inplace=True)
 
     #######################
     # Count excluded json rows
@@ -218,52 +189,92 @@ def CVS_transform(df, stats, binary_labels, excluded_labels):
     df = df[~(mask_rater | mask_auditor)].copy()
 
     # ID Format check
-    df['rater_id'] = df['rater_id'].apply(transformer_utils.id_format_check)
-    df['auditor_id'] = df['auditor_id'].apply(transformer_utils.id_format_check)
-    df['entity_id'] = df['entity_id'].apply(transformer_utils.id_format_check)
+    df["rater_id"] = df["rater_id"].apply(transformer_utils.id_format_check)
+    df["job_id"] = df["job_id"].apply(transformer_utils.id_format_check)
     # Count invalid IDs
-    mask_invalid_id = df[['rater_id', 'auditor_id', 'entity_id']].isnull().any(axis=1)
+    mask_invalid_id = df[["rater_id", "job_id"]].isnull().any(axis=1)
     stats["skipped_invalid_id"] = int(mask_invalid_id.sum())
     # Remove from df
     df = df[~mask_invalid_id].copy()
     #########################
 
-    # Drop duplicates
-    df_rater = CVS_drop_dupes(df, grouped_columns=["sample_ds", "routing_name", "entity_id", "rater_id"], aggregated_columns=["rater_labels"])
-    df_auditor = CVS_drop_dupes(df, grouped_columns=["routing_name", "entity_id"], aggregated_columns=["auditor_id", "auditor_labels", "sample_ds"])
+    # Expand key values
+    rater_labels_pivoted = expand_label_columns(df, "rater_labels", "r", excluded_list)
+    auditor_labels_pivoted = expand_label_columns(df, "auditor_labels", "a", excluded_list)
 
-    # Unpivot labels
-    df_rater = CVS_unpivot_labels(df_rater,'rater')
-    df_auditor = CVS_unpivot_labels(df_auditor,'auditor')
+    # Concatenate
+    df = pd.concat([df, rater_labels_pivoted, auditor_labels_pivoted], axis=1)
 
-    # Bulk rename to Universal format
-    df_rater = CVS_bulk_rename_to_universal_format(df_rater)
-    df_auditor = CVS_bulk_rename_to_universal_format(df_auditor)
+    # Extract labels found and create a list (all_labels)
+    def extract_labels(expanded_df, prefix):
+        keys = []
+        for col in expanded_df.columns:
+            if col.startswith(f"{prefix}_"):
+                keys.append(col[len(prefix)+1 :])  # rimuove "x_rater_" o "x_auditor_"
+        return set(keys)
 
-    # Combine dataframes
-    df_combined = pd.concat([df_rater, df_auditor], ignore_index=True, sort=False).fillna("")
+    rater_keys = extract_labels(rater_labels_pivoted, "r")
+    auditor_keys = extract_labels(auditor_labels_pivoted, "a")
+    all_labels = sorted(rater_keys.union(auditor_keys))
+    stats["label_list"] = all_labels
+    
+    # Rebuild df
+    base_cols = ["workflow", "job_date", "rater_id", "auditor_id", "job_id"]
+    base_df = df[base_cols].copy()
 
-    return df_combined
+    # concateno: base + pivotate
+    to_concat = [base_df, rater_labels_pivoted, auditor_labels_pivoted]
+    result = pd.concat(to_concat, axis=1)
+
+    result = result.drop(columns=["rater_labels", "auditor_labels"], errors="ignore")
+    
+    # [workflow, job_date, rater_id, auditor_id, job_id] [r_label1, a_label1] [r_label2, a_label2] ...
+
+    # Compile stats
+    stats["rows_final"] = len(result)
 
 
-def transform(df, metadata):
-    """
-    Entry point for CVS projects. Extracts parameters from metadata and calls CVS_transform.
-    """
+    return result
+
+
+def transform(df, module_info):
     stats = {}
     stats["etl_module"] = "CVS"
     stats["rows_before_transformation"] = len(df)
 
-    binary_labels = transformer_utils.get_binary_labels(metadata)
-    excluded_labels = transformer_utils.get_excluded_labels(metadata)
-
-    logging.info(f"Transforming CVS data with {len(binary_labels)} binary labels and {len(excluded_labels)} excluded labels")
+    # Module config
+    mod_config = module_info.get("module_config")
     
-    df = CVS_transform(df, stats, binary_labels, excluded_labels)
+    df = CVS_transform(df, stats, mod_config)
     stats["rows_after_transformation"] = len(df)
     logging.info(f"Transformed CVS data: {len(df)} rows")
+
     
-    df = transformer_utils.enrich_dataframe_with_metadata(df, metadata)
-    logging.info(f"Enriched CVS data with metadata")
+    # Crea BASE CONFIG per BASE AUDIT
+
+    binary_labels_list = mod_config.get("binary_labels")
+    pos_label_map = {
+        item["label_name"]: item["binary_positive_value"] 
+        for item in binary_labels_list
+    }
     
-    return df, stats
+    module_info["base_config"] = {
+        "labels": [
+            {
+                "label_name": label,
+                "rater_label_column": f"r_{label}",
+                "auditor_label_column": f"a_{label}",
+                "auditor_column_type": "answer",
+                "is_label_binary": label in pos_label_map,
+                "label_binary_pos_value": pos_label_map.get(label, ""),
+                "weight": "",
+            }
+            for label in stats.get("label_list", [])
+        ],
+    }
+    base_config = module_info.get("base_config", {})
+    base_df, base_info = baudit(df, base_config)
+    
+    stats["base_info"] = base_info
+    
+    return base_df, stats

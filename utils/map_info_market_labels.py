@@ -5,7 +5,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pipeline_lib.config as cfg
 import pipeline_lib.pipeline_utils as pu
-from pipeline_lib.etl.query_map_info import query_map_info_run
+from pipeline_lib.sql.query_map_info import query_map_info_run
 import pandas as pd
 from openpyxl import load_workbook
 

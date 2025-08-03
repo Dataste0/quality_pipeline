@@ -121,6 +121,19 @@ class SnapshotManager:
         finally:
             self.lock.release()
 
+    def get_snapshot_item(self, item):
+        self.lock.acquire()
+        try:
+            if not os.path.exists(self.filepath):
+                return pd.DataFrame(columns=self.columns)
+            df = pd.read_csv(self.filepath)
+            if "snapshot_id" not in df.columns:
+                return pd.DataFrame(columns=df.columns)
+            df["snapshot_id"] = pd.to_numeric(df["snapshot_id"], errors="coerce")
+            return df[df["snapshot_id"] == snapshot_id].copy()
+        finally:
+            self.lock.release()
+
     def get_last_snapshot_no(self):
         return self._get_last_id()
         
@@ -146,9 +159,8 @@ class TransformationQueueManager:
             'data_week',
             'filename',
             'transform_status',
-            'output_filename',
+            'output_filenames',
             'content_weeks',
-            'parquet_filenames',
             'olap_sync'
         ]
 
@@ -189,9 +201,8 @@ class TransformationQueueManager:
                 "filename": str(record_dict["filename"]),
                 "transform_status": "enqueued",
                 "transform_info": "",
-                "output_filename": "",
+                "output_filenames": "",
                 "content_weeks": "",
-                "parquet_filenames": "",
                 "olap_sync": ""
                 #**{col: str(record_dict[col]) for col in self.required_columns},
             }

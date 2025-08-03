@@ -3,7 +3,7 @@ import argparse
 from pipeline_lib.logging_config import setup_logging
 from pipeline_lib.rawdata_fetch import generate_rawdata_snapshot, compare_rawdata_snapshots
 from pipeline_lib.transform_rawdata import transform_enqueued_items
-from pipeline_lib.olap_sync import olap_sync
+#from pipeline_lib.olap_sync import olap_sync
 
 # --- Setup loggers
 setup_logging()
@@ -27,15 +27,15 @@ def main():
         generate_rawdata_snapshot()
         compare_rawdata_snapshots()
         transform_enqueued_items()
-        olap_sync()
+        #olap_sync()
     elif args.snapshot:
         generate_rawdata_snapshot()
     elif args.enqueue:
         compare_rawdata_snapshots()
     elif args.transform:
         transform_enqueued_items()
-    elif args.olap:
-        olap_sync()
+    #elif args.olap:
+    #    olap_sync()
 
     print("QUALITY PIPELINE - Iteration Ended")
 

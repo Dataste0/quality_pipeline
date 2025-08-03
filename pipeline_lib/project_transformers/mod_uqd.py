@@ -1,39 +1,29 @@
+
+# Output to BASE MULTI or AUDIT
+# (base-audit) [workflow, job_date, rater_id, auditor_id, job_id] [r_label1, a_label1] [r_label2, a_label2] ...
+# (base-multi) [workflow, job_date, rater_id, job_id] [r_label1, r_label2, r_label3] ...
+
 import pandas as pd
 import json
 import re
 import logging
 from pipeline_lib.project_transformers import transformer_utils
+from pipeline_lib.project_transformers.base_audit import base_transform as baudit
+from pipeline_lib.project_transformers.base_multi import base_transform as bmulti
 
 # --- Setup logger
 logger = logging.getLogger('pipeline.transform_modules')
 
-
-# Actor ID/Job ID check
-def UQD_int_number_check(val):
-    if val is None or pd.isna(val) or val == "":
-        return ""
-    
-    int_number_regex = re.compile(r'^\d+$')
-    if isinstance(val, str) and int_number_regex.fullmatch(val) and 'e' not in val.lower():
-        return val
-    
-    return 'pipeline_error::invalid_number_format'
-
-
-def UQD_filter_out_invalid_id_rows(df):
-    initial_row_count = len(df)
-    logging.debug(f"Filtering out rows with invalid IDs - Initial row count: {initial_row_count}")
-    
-    filtered_df = df[
-        (df['actor_id'] != 'pipeline_error::invalid_number_format') &
-        (df['job_id'] != 'pipeline_error::invalid_number_format')
-    ].copy()
-
-    final_row_count = len(filtered_df)
-    logging.debug(f"Filtering out rows with invalid IDs - Final row count: {final_row_count}")
-    skipped = initial_row_count - final_row_count
-    
-    return filtered_df, skipped
+# UQD Default Columns
+UQD_RATER_ID_COL_NAME = "actor_id"
+UQD_AUDITOR_ID_COL_NAME = "quality_actor_id"
+UQD_JOB_ID_COL_NAME = "job_id"
+UQD_SUBMISSION_DATE_COL_NAME = "review_ds"
+UQD_WORKFLOW_COL_NAME = "queue_name"
+UQD_RATER_DECISION_DATA_COL_NAME = "decision_data"
+UQD_RATER_EXTRACTED_DECISION_DATA_COL_NAME = "extracted_label"
+UQD_AUDITOR_DECISION_DATA_COL_NAME = "quality_decision_data"
+UQD_AUDITOR_EXTRACTED_DECISION_DATA_COL_NAME = "quality_extracted_label"
 
 
 # Flatten values, converting lists/dictionaries into strings
@@ -62,7 +52,7 @@ def UQD_extract_labels(json_str, use_extracted):
         #print(f"PARSED {type(first_level_json)} {repr(first_level_json)}")
 
         if use_extracted:
-            logging.debug("Using Extracted Data")
+            logging.debug("Using Extracted Data {json_str}")
             extracted_list = []
             try:
                 extracted = [f"{key}::{UQD_format_value(value)}" for key, value in first_level_json.items()]
@@ -140,436 +130,264 @@ def UQD_extract_labels(json_str, use_extracted):
         logging.error(f"Unexpected Error: {e}")
         return []
 
-# Filter out excluded labels
-def UQD_filter_labels(label_list, excluded_list):
-    if not isinstance(label_list, list):
-        #print(f"Label List: {label_list}")
-        print("ERROR - Filter Labels: expected a list of labels")
-        return ['pipeline_error::invalid_json_format']
-
-    return [item for item in label_list if item.split("::")[0] not in excluded_list]
-
-# Compute confusion type for rater_labels
-def UQD_compute_confusion_type(rater_labels, auditor_labels, binary_labels):
-    if not isinstance(rater_labels, list) or not isinstance(auditor_labels, list):
-        logging.error("UQD_compute_confusion_type - Format error: expected list")
-        return []
-
-    updated_labels = []
-    for label in rater_labels:
-        key_value = label.split("::")
-        if len(key_value) == 2:
-            key, value = key_value
-
-            if key in binary_labels:
-                pos_val = binary_labels[key]["positive_value"].lower()
-
-                auditor_value = next((aud_label.split("::")[1] for aud_label in auditor_labels if aud_label.startswith(f"{key}::")), None)
-
-                # Compute confusion type
-                rater_lower = value.lower()
-                auditor_lower = auditor_value.lower() if auditor_value else ""
-
-                if pos_val in auditor_lower:
-                    confusion_type = "TP" if pos_val in rater_lower else "FN"
-                else:
-                    confusion_type = "FP" if pos_val in rater_lower else "TN"
-
-                # Append confusion type
-                updated_labels.append(f"{key}::{value}|{confusion_type}")
-            else:
-                updated_labels.append(label)  # Keep as is if not in binary_labels
-        else:
-            logging.error("UQD_compute_confusion_type - Incorrect format")
-            return []
-    return updated_labels
-
-# Drop duplicates
-def UQD_drop_dupes(df, grouped_columns, aggregated_columns):
-    # Mask to exclude rows with NaN or empty strings in - at least - 1 of the selected_columns
-    mask = df[aggregated_columns].notna().all(axis=1) & (df[aggregated_columns] != "").all(axis=1)
-    df_clean = df[mask]
-    # Removes dupes
-    df_deduped = df_clean.drop_duplicates(subset=grouped_columns, keep='first')
-    return df_deduped[grouped_columns + aggregated_columns]
 
 
-# Explode labels
-def UQD_unpivot_labels(df, role):
-    labels_col = f"{role}_labels"
+def expand_label_columns(df, label_col, prefix, excluded_list=None):
+    excluded_set = set(x.strip().lower() for x in (excluded_list or []))
+    tmp = df[[label_col]].copy()
+    tmp[label_col] = tmp[label_col].apply(lambda x: x if isinstance(x, list) else [])
+    exploded = tmp.explode(label_col).reset_index()  # mantiene indice originale
 
-    # Explode the list of labels into separate rows; drop rows with null labels
-    df_exploded = df.explode(labels_col).dropna(subset=[labels_col])
+    def split_kv(s):
+        if not isinstance(s, str) or "::" not in s:
+            return pd.Series({f"{prefix}_key": None, f"{prefix}_value": None})
+        k, v = s.split("::", 1)
+        k_clean = k.strip().lower()
+        return pd.Series({f"{prefix}_key": k_clean, f"{prefix}_value": v})
 
-    # Safe split function: always returns tuple of length 2
-    def safe_split_label(x):
-        try:
-            if pd.isna(x) or not isinstance(x, str) or x.strip() == "":
-                return (None, None)
-            parts = x.split("::", 1)
-            return (parts[0], parts[1]) if len(parts) == 2 else (parts[0], None)
-        except Exception:
-            return (None, None)
+    kv = exploded[label_col].apply(split_kv)
+    exploded = pd.concat([exploded, kv], axis=1)
 
-    def safe_split_confusion(x):
-        try:
-            if pd.isna(x) or not isinstance(x, str) or x.strip() == "":
-                return (None, None)
-            parts = x.split("|", 1)
-            return (parts[0], parts[1]) if len(parts) == 2 else (parts[0], None)
-        except Exception:
-            return (None, None)
+    # scarta le key escluse (senza prefisso: qui è solo 'quality', 'speed', ecc.)
+    exploded = exploded[~exploded[f"{prefix}_key"].isin(excluded_set)]
 
-    # Use .apply and convert to DataFrame explicitly
-    label_split = df_exploded[labels_col].apply(safe_split_label)
-    df_exploded["label_name"] = label_split.apply(lambda x: x[0])
-    df_exploded["label_response"] = label_split.apply(lambda x: x[1])
+    pivoted = (
+        exploded
+        .dropna(subset=[f"{prefix}_key"])
+        .pivot_table(
+            index=exploded["index"],
+            columns=f"{prefix}_key",
+            values=f"{prefix}_value",
+            aggfunc=lambda x: x.iloc[0] if len(x) else None,
+        )
+    )
+    pivoted.columns = [f"{prefix}_{col}" for col in pivoted.columns]
+    pivoted = pivoted.reindex(df.index, fill_value=None)
+    return pivoted
 
-    confusion_split = df_exploded["label_response"].apply(safe_split_confusion)
-    df_exploded["label_response"] = confusion_split.apply(lambda x: x[0])
-    df_exploded["confusion_type"] = confusion_split.apply(lambda x: x[1])
 
-    df_exploded["confusion_type"] = df_exploded["confusion_type"].fillna("")
 
-    df_exploded["is_audit"] = 1 if role == "auditor" else 0
-    df_exploded["source_of_truth"] = 1 if role == "golden" else 0
 
-    df_exploded = df_exploded.drop(columns=[labels_col])
 
-    return df_exploded
 
-# Bulk rename columns
-def UQD_bulk_rename_to_universal_format(df):
-    rename_dict = {
-        "rater_id"            : "actor_id",
-        "auditor_id"          : "actor_id",
-        "quality_actor_id"    : "actor_id",
-
-        "queue_name"          : "workflow",
-        "routing_name"        : "workflow",
-
-        "review_ds"           : "submission_date",
-        "sample_ds"           : "submission_date",
-
-        "entity_id"           : "job_id",
-
-        "label_name"          : "parent_label",
-        "label_response"      : "response_data",
-        "confusion_type"      : "recall_precision"
+def UQD_transform(df, stats, mod_config):
+    """
+    mod_config = {
+        "quality_methodology": "multi",
+        "use_extracted": True,
+        "excluded_labels": [],
+        "binary_labels": [
+            {
+                "label_name": "is_rateable",
+                "binary_positive_value": "yes"
+            }
+        ]
     }
-    existing_renames = {k: v for k, v in rename_dict.items() if k in df.columns}
-    return df.rename(columns=existing_renames)
+    """
 
+     
+    stats["rows_initial"] = len(df)
 
-def UQD_audit_transform(df, binary_labels, excluded_labels, use_extracted):
-    info_audit_rows_initial = len(df)
+    quality_methodology = mod_config.get("quality_methodology", None)
+    use_extracted = mod_config.get("use_extracted", False)
+    excluded_list = mod_config.get("excluded_labels", [])
 
-    # Fix date format and remove rows with incorrect dates
-    df['review_ds'] = df['review_ds'].apply(transformer_utils.convert_tricky_date)
-    info_audit_skipped_invalid_datetime = df['review_ds'].isnull().sum()
-    df = df[df['review_ds'].notnull()].copy()
+    needs_auditor = quality_methodology in ("audit", "golden")
+    stats["quality_methodology"] = quality_methodology
 
     if use_extracted:
-        RATER_DECISION_COLUMN = "extracted_label"
-        AUDITOR_DECISION_COLUMN = "quality_extracted_label"
+        uqd_rater_decision_column = UQD_RATER_EXTRACTED_DECISION_DATA_COL_NAME
+        uqd_auditor_decision_column = UQD_AUDITOR_EXTRACTED_DECISION_DATA_COL_NAME
     else:
-        RATER_DECISION_COLUMN = "decision_data"
-        AUDITOR_DECISION_COLUMN = "quality_decision_data"
+        uqd_rater_decision_column = UQD_RATER_DECISION_DATA_COL_NAME
+        uqd_auditor_decision_column = UQD_AUDITOR_DECISION_DATA_COL_NAME
+            
     
+    # Map columns
+    column_map = {
+        UQD_RATER_ID_COL_NAME               : "rater_id",
+        UQD_AUDITOR_ID_COL_NAME             : "auditor_id",
+        UQD_JOB_ID_COL_NAME                 : "job_id",
+        UQD_SUBMISSION_DATE_COL_NAME        : "job_date",
+        UQD_WORKFLOW_COL_NAME               : "workflow",
+        uqd_rater_decision_column           : "rater_parse_data",
+        uqd_auditor_decision_column         : "auditor_parse_data"
+    }
+   
+    df.rename(columns=column_map, inplace=True)
+
+    # Fix date format and remove rows with incorrect dates
+    df["job_date"] = df["job_date"].apply(transformer_utils.convert_tricky_date)
+    stats["skipped_invalid_datetime"] = int(df["job_date"].isnull().sum())
+    df = df[df["job_date"].notnull()].copy()
+    
+    # Fix date format and remove rows with incorrect dates
+    df["job_date"] = df["job_date"].apply(transformer_utils.convert_tricky_date)
+    stats["skipped_invalid_datetime"] = int(df["job_date"].isnull().sum())
+    df = df[df["job_date"].notnull()].copy()
+
     # ID Format check
-    df['actor_id'] = df['actor_id'].apply(transformer_utils.id_format_check)
-    df['quality_actor_id'] = df['quality_actor_id'].apply(transformer_utils.id_format_check)
-    df['entity_id'] = df['entity_id'].apply(transformer_utils.id_format_check)
+    df["job_id"] = df["job_id"].apply(transformer_utils.id_format_check)
+    df["rater_id"] = df["rater_id"].apply(transformer_utils.id_format_check)
+    mask_cols = ["job_id", "rater_id"]
+    if needs_auditor:
+        df["auditor_id"] = df["auditor_id"].apply(transformer_utils.id_format_check)
+        mask_cols.append("auditor_id")
+
     # Count invalid IDs
-    mask_invalid_id = df[['actor_id', 'quality_actor_id', 'entity_id']].isnull().any(axis=1)
-    info_audit_skipped_invalid_id = mask_invalid_id.sum()
+    mask_cols = []
+    mask_invalid_id = df[mask_cols].isnull().any(axis=1)
+    stats["skipped_invalid_id"] = int(mask_invalid_id.sum())
     # Remove from df
     df = df[~mask_invalid_id].copy()
 
     # Remove empty rows
-    df = df[df[RATER_DECISION_COLUMN].notna() & (df[RATER_DECISION_COLUMN] != '')]
-    df = df[df[AUDITOR_DECISION_COLUMN].notna() & (df[AUDITOR_DECISION_COLUMN] != '')]
+    df = df[df["rater_parse_data"].notna() & (df["rater_parse_data"] != '')]
+    if needs_auditor:
+        df = df[df["auditor_parse_data"].notna() & (df["auditor_parse_data"] != '')]
+
     # Replace semicolon with comma
-    df[RATER_DECISION_COLUMN] = df[RATER_DECISION_COLUMN].fillna("").apply(lambda x: x.replace(";", ","))
-    df[AUDITOR_DECISION_COLUMN] = df[AUDITOR_DECISION_COLUMN].fillna("").apply(lambda x: x.replace(";", ","))
+    df["rater_parse_data"] = df["rater_parse_data"].fillna("").apply(lambda x: x.replace(";", ","))
+    if needs_auditor:
+        df["auditor_parse_data"] = df["auditor_parse_data"].fillna("").apply(lambda x: x.replace(";", ","))
+    
     # Parse JSON
     logging.debug("Extracting labels UQD_audit")
-    df['rater_labels'] = [UQD_extract_labels(x, use_extracted) for x in df[RATER_DECISION_COLUMN]]
-    df['auditor_labels'] = [UQD_extract_labels(x, use_extracted) for x in df[AUDITOR_DECISION_COLUMN]]
+    df['rater_labels'] = [UQD_extract_labels(x, use_extracted) for x in df["rater_parse_data"]]
+    if needs_auditor:
+        df['auditor_labels'] = [UQD_extract_labels(x, use_extracted) for x in df["auditor_parse_data"]]
 
-    # Count excluded json rows
-    mask_rater = df['rater_labels'].isna() | df['rater_labels'].astype(str).str.lower().isin(['', 'na', 'null', 'nan'])
-    mask_auditor = df['auditor_labels'].isna() | df['auditor_labels'].astype(str).str.lower().isin(['', 'na', 'null', 'nan'])
-    info_audit_skipped_invalid_json = (mask_rater | mask_auditor).sum()
-    # Remove invalid json rows
-    df = df[~(mask_rater | mask_auditor)].copy()
-
-    # Filter out excluded labels
-    logging.debug("Filtering labels UQD_audit")
-    df['rater_labels'] = df['rater_labels'].apply(UQD_filter_labels, args=(excluded_labels,))
-    df['auditor_labels'] = df['auditor_labels'].apply(UQD_filter_labels, args=(excluded_labels,))
+    #
+    # Returns ['key::value', 'key::value', 'key::value']
+    #
     
-    # Compute confusion_type and concatenate it to rater binary labels in rater_labels column
-    df["rater_labels"] = [
-        UQD_compute_confusion_type(rater, auditor, binary_labels)
-        for rater, auditor in zip(df["rater_labels"], df["auditor_labels"])
-    ]
+    # Count excluded json rows
+    mask_rater = df["rater_labels"].isna() | df["rater_labels"].astype(str).str.lower().isin(["", "na", "null", "nan"])
+    if needs_auditor:
+        mask_auditor = df["auditor_labels"].isna() | df["auditor_labels"].astype(str).str.lower().isin(["", "na", "null", "nan"])
+        combined_mask = mask_rater | mask_auditor
+    else:
+        combined_mask = mask_rater
+    stats["skipped_invalid_json"] = int(combined_mask.sum())
+    # Remove invalid json rows
+    df = df[~combined_mask].copy()
+    
+    # Keep only relevant columns
+    cols = ["job_date", "workflow", "job_id", "rater_id", "rater_labels"]
+    if needs_auditor:
+        cols += ["auditor_id", "auditor_labels"]
+    df = df[cols]
 
     # Drop duplicates
-    df_rater = UQD_drop_dupes(df, grouped_columns=["review_ds", "queue_name", "entity_id", "actor_id"], aggregated_columns=["rater_labels"])
-    df_auditor = UQD_drop_dupes(df, grouped_columns=["queue_name", "entity_id"], aggregated_columns=["quality_actor_id", "auditor_labels", "review_ds"])
-    # Unpivot
-    df_rater = UQD_unpivot_labels(df_rater,'rater')
-    df_auditor = UQD_unpivot_labels(df_auditor,'auditor')
-
-    # Bulk rename to Universal format
-    df_rater = UQD_bulk_rename_to_universal_format(df_rater)
-    df_auditor = UQD_bulk_rename_to_universal_format(df_auditor)
-    # Combine dataframes
-    df_combined = pd.concat([df_rater, df_auditor], ignore_index=True, sort=False).fillna("")
-    #print(f"AUDIT DATAFRAME: {df_combined.columns}")
-
-    info_audit_rows_final = len(df_combined)
-    info_audit = {
-        #"methodology": "audit",
-        "rows_initial": int(info_audit_rows_initial),
-        "rows_final": int(info_audit_rows_final),
-        "skipped_invalid_datetime": int(info_audit_skipped_invalid_datetime),
-        "skipped_invalid_json": int(info_audit_skipped_invalid_json),
-        "skipped_invalid_id": int(info_audit_skipped_invalid_id)
-    }
-    return df_combined, info_audit
-
-def UQD_golden_transform(df, binary_labels, excluded_labels, use_extracted):
-    info_golden_rows_initial = len(df)
-
-    # Fix date format and remove rows with incorrect dates
-    df['review_ds'] = df['review_ds'].apply(transformer_utils.convert_tricky_date)
-    info_golden_skipped_invalid_datetime = df['review_ds'].isnull().sum()
-    df = df[df['review_ds'].notnull()].copy()
-
-    if use_extracted:
-        RATER_DECISION_COLUMN = "extracted_label"
-        GOLDEN_DECISION_COLUMN = "quality_extracted_label"
-    else:
-        RATER_DECISION_COLUMN = "decision_data"
-        GOLDEN_DECISION_COLUMN = "quality_decision_data"
+    df.drop_duplicates(subset=["rater_id", "job_id"], keep="last", inplace=True)
     
-    # ID Format check
-    df['actor_id'] = df['actor_id'].apply(transformer_utils.id_format_check)
-    #df['quality_actor_id'] = df['quality_actor_id'].apply(transformer_utils.id_format_check)
-    df['entity_id'] = df['entity_id'].apply(transformer_utils.id_format_check)
-    # Count invalid IDs
-    #mask_invalid_id = df[['actor_id', 'quality_actor_id', 'entity_id']].isnull().any(axis=1)
-    mask_invalid_id = df[['actor_id', 'entity_id']].isnull().any(axis=1)
-    info_golden_skipped_invalid_id = mask_invalid_id.sum()
-    # Remove from df
-    df = df[~mask_invalid_id].copy()
-
-
-    # Remove empty rows
-    df = df[df[RATER_DECISION_COLUMN].notna() & (df[RATER_DECISION_COLUMN] != '')]
-    df = df[df[GOLDEN_DECISION_COLUMN].notna() & (df[GOLDEN_DECISION_COLUMN] != '')]
-    # Replace semicolon with comma
-    df[RATER_DECISION_COLUMN] = df[RATER_DECISION_COLUMN].fillna("").apply(lambda x: x.replace(";", ","))
-    df[GOLDEN_DECISION_COLUMN] = df[GOLDEN_DECISION_COLUMN].fillna("").apply(lambda x: x.replace(";", ","))
-    # Parse JSON
-    df['rater_labels'] = [UQD_extract_labels(x, use_extracted) for x in df[RATER_DECISION_COLUMN]]
-    df['golden_labels'] = [UQD_extract_labels(x, use_extracted) for x in df[GOLDEN_DECISION_COLUMN]]
-
-    # Count excluded json rows
-    mask_rater = df['rater_labels'].isna() | df['rater_labels'].astype(str).str.lower().isin(['', 'na', 'null', 'nan'])
-    mask_golden = df['golden_labels'].isna() | df['golden_labels'].astype(str).str.lower().isin(['', 'na', 'null', 'nan'])
-    info_golden_skipped_invalid_json = (mask_rater | mask_golden).sum()
-    # Remove invalid json rows
-    df = df[~(mask_rater | mask_golden)].copy()
-
-
-    # Filter out excluded labels
-    df['rater_labels'] = df['rater_labels'].apply(UQD_filter_labels, args=(excluded_labels,))
-    df['golden_labels'] = df['golden_labels'].apply(UQD_filter_labels, args=(excluded_labels,))
-    # Compute confusion_type and concatenate it to rater binary labels in rater_labels column
-    df["rater_labels"] = [
-        UQD_compute_confusion_type(rater, golden, binary_labels)
-        for rater, golden in zip(df["rater_labels"], df["golden_labels"])
-    ]
-
-
-    # Drop duplicates
-    df_rater = UQD_drop_dupes(df, grouped_columns=["review_ds", "queue_name", "entity_id", "actor_id"], aggregated_columns=["rater_labels"])
-    df_golden = UQD_drop_dupes(df, grouped_columns=["queue_name", "entity_id"], aggregated_columns=["quality_actor_id", "golden_labels", "review_ds"])
-    # Unpivot
-    df_rater = UQD_unpivot_labels(df_rater,'rater')
-    df_golden = UQD_unpivot_labels(df_golden,'golden')
-
-    # Bulk rename to Universal format
-    df_rater = UQD_bulk_rename_to_universal_format(df_rater)
-    df_golden = UQD_bulk_rename_to_universal_format(df_golden)
-    # Combine dataframes
-    df_combined = pd.concat([df_rater, df_golden], ignore_index=True, sort=False).fillna("")
-    #print(f"GOLDEN DATAFRAME: {df_combined.columns}")
-
-    info_golden_rows_final = len(df_combined)
-    info_golden = {
-        #"methodology": "golden",
-        "rows_initial": int(info_golden_rows_initial),
-        "rows_final": int(info_golden_rows_final),
-        "skipped_invalid_datetime": int(info_golden_skipped_invalid_datetime),
-        "skipped_invalid_json": int(info_golden_skipped_invalid_json),
-        "skipped_invalid_id": int(info_golden_skipped_invalid_id)
-    }
-    return df_combined, info_golden
-
-
-def UQD_multi_transform(df, binary_labels, excluded_labels, use_extracted):
-    info_multi_rows_initial = len(df)
-    #df.to_csv('test-multi1.csv')
-
-    # Fix date format and remove rows with incorrect dates
-    df['review_ds'] = df['review_ds'].apply(transformer_utils.convert_tricky_date)
-    info_multi_skipped_invalid_datetime = df['review_ds'].isnull().sum()
-    df = df[df['review_ds'].notnull()].copy()
-
-
-    if use_extracted:
-        RATER_DECISION_COLUMN = "extracted_label"
-        #AUDITOR_DECISION_COLUMN = "quality_extracted_label"
+    # Expand key values
+    rater_labels_pivoted = expand_label_columns(df, "rater_labels", "r", excluded_list)
+    # costruisci la parte auditor solo se serve e c'è la colonna
+    if needs_auditor and "auditor_labels" in df.columns:
+        auditor_labels_pivoted = expand_label_columns(df, "auditor_labels", "a", excluded_list)
     else:
-        RATER_DECISION_COLUMN = "decision_data"
-        #AUDITOR_DECISION_COLUMN = "quality_decision_data"
+        auditor_labels_pivoted = pd.DataFrame(index=df.index)  # placeholder vuoto
 
-    # ID Format check
-    df['actor_id'] = df['actor_id'].apply(transformer_utils.id_format_check)
-    df['entity_id'] = df['entity_id'].apply(transformer_utils.id_format_check)
-    # Count invalid IDs
-    mask_invalid_id = df[['actor_id', 'entity_id']].isnull().any(axis=1)
-    info_multi_skipped_invalid_id = mask_invalid_id.sum()
-    # Remove from df
-    df = df[~mask_invalid_id].copy()
+    # Concatenate
+    result = pd.concat([df, rater_labels_pivoted, auditor_labels_pivoted], axis=1)
+    result = result.drop(columns=["rater_labels", "auditor_labels"], errors="ignore")
 
-    #df.to_csv('test-multi2.csv')
+    # Extract labels found and create a list (all_labels)
+    def extract_labels(expanded_df, prefix):
+        keys = []
+        for col in expanded_df.columns:
+            if col.startswith(f"{prefix}_"):
+                keys.append(col[len(prefix)+1 :])  # rimuove "r_" o "a_"
+        return set(keys)
 
-    # Remove empty rows
-    df = df[df[RATER_DECISION_COLUMN].notna() & (df[RATER_DECISION_COLUMN] != '')]
-    # Replace semicolon with comma
-    df[RATER_DECISION_COLUMN] = df[RATER_DECISION_COLUMN].fillna("").apply(lambda x: x.replace(";", ","))
-    # Parse JSON
-    logging.debug("Extracting labels UQD_multi")
-    df['rater_labels'] = [UQD_extract_labels(x, use_extracted) for x in df[RATER_DECISION_COLUMN]]
-    #df.to_csv('test-multi3.csv')
-    # Count excluded json rows
-    mask_rater = df['rater_labels'].isna() | df['rater_labels'].astype(str).str.lower().isin(['', 'na', 'null', 'nan'])
-    info_multi_skipped_invalid_json = mask_rater.sum()
-    # Remove invalid json rows
-    df = df[~mask_rater].copy()
-
-
-    # Filter out excluded labels
-    df['rater_labels'] = df['rater_labels'].apply(UQD_filter_labels, args=(excluded_labels,))
-
-
-    # Drop duplicates
-    df_rater = UQD_drop_dupes(df, grouped_columns=["review_ds", "queue_name", "entity_id", "actor_id"], aggregated_columns=["rater_labels"])
-    # Unpivot
-    df_rater = UQD_unpivot_labels(df_rater,'rater')
-
-    # Bulk rename to Universal format
-    df_rater = UQD_bulk_rename_to_universal_format(df_rater)
-
-    info_multi_rows_final = len(df_rater)
-    info_multi = {
-        #"methodology": "multi",
-        "rows_initial": int(info_multi_rows_initial),
-        "rows_final": int(info_multi_rows_final),
-        "skipped_invalid_datetime": int(info_multi_skipped_invalid_datetime),
-        "skipped_invalid_json": int(info_multi_skipped_invalid_json),
-        "skipped_invalid_id": int(info_multi_skipped_invalid_id)
-    }
-    return df_rater, info_multi
-
-
-def UQD_transform(df, stats, binary_labels, excluded_labels, use_extracted=False, quality_methods=None):
-    # Strip initial spaces from column names
-    df.columns = df.columns.str.strip()
-
+    rater_keys = extract_labels(rater_labels_pivoted, "r")
+    auditor_keys = extract_labels(auditor_labels_pivoted, "a") if needs_auditor else set()
+    all_labels = sorted(rater_keys.union(auditor_keys))
+    stats["label_list"] = all_labels
     
-    """
-    # Check actor_id/job_id format
-    df['actor_id'] = df['actor_id'].apply(UQD_int_number_check)
-    df['job_id'] = df['job_id'].apply(UQD_int_number_check)
+    
+    # Rebuild df
+    base_cols = ["workflow", "job_date", "rater_id", "job_id"]
+    if needs_auditor:
+        base_cols.insert(2, "auditor_id")  # order: date, rater_id, auditor_id, job_id
+    base_df = df[base_cols].copy()
 
-    # Skip row if actor_id or job_id is invalid
-    df, skipped = UQD_filter_out_invalid_id_rows(df)
-    if skipped > 0:
-        logging.warning(f"Skipped {skipped} rows with invalid actor_id or job_id")
-    """
+    # concateno: base + pivotate
+    to_concat = [base_df, rater_labels_pivoted]
+    if needs_auditor:
+        to_concat.append(auditor_labels_pivoted)
 
-    # Rename job_id column to entity_id
-    df = df.rename(columns={"job_id": "entity_id"})
+    result = pd.concat(to_concat, axis=1)
 
-    # Split dataframe per methodology
-    columns_to_keep = ["review_ds", "queue_name", "entity_id", "actor_id", "decision_data", "quality_actor_id", "quality_decision_data"]
-    if use_extracted:
-        columns_to_keep.extend(["extracted_label", "quality_extracted_label"])
-
-    #quality_methodologies_file = df['quality_methodology'].str.lower().unique()
-    #print(f"Quality methodologies found: {quality_methodologies_file}")
-
-    # Transform Methodologies
-    if quality_methods.get('audit', False):
-        df_audit = df.loc[df['quality_methodology'].str.lower().str.contains('audit', na=False), columns_to_keep].copy()
-        if not df_audit.empty:
-            df_audit, info_audit = UQD_audit_transform(df_audit, binary_labels, excluded_labels, use_extracted)
-            stats["audit"] = info_audit
-
-    if quality_methods.get('multireview', False):
-        df_multi = df.loc[df['quality_methodology'].str.lower().str.contains('multi', na=False), columns_to_keep].copy()
-        if not df_multi.empty:
-            df_multi, info_multi = UQD_multi_transform(df_multi, binary_labels, excluded_labels, use_extracted)
-            stats["multi"] = info_multi
-
-    if quality_methods.get('golden', False):
-        df_golden = df.loc[df['quality_methodology'].str.lower().str.contains('golden', na=False), columns_to_keep].copy()
-        if not df_golden.empty:
-            df_golden, info_golden = UQD_golden_transform(df_golden, binary_labels, excluded_labels, use_extracted)
-            stats["golden"] = info_golden
+    result = result.drop(columns=["rater_labels", "auditor_labels"], errors="ignore")
 
 
-    # Combine dataframes
-    dfs_to_concat = []
-    if quality_methods.get('audit', False) and not df_audit.empty:
-        dfs_to_concat.append(df_audit)
-    if quality_methods.get('multireview', False) and not df_multi.empty:
-        dfs_to_concat.append(df_multi)
-    if quality_methods.get('golden', False) and not df_golden.empty:
-        dfs_to_concat.append(df_golden)
-
-    if dfs_to_concat: #At least one dataframe is not empty
-        df_combined = pd.concat(dfs_to_concat, ignore_index=True, sort=False).fillna("")
-    else:
-        logging.error("No data available to concatenate. Please check input DataFrames")
-        df_combined = pd.DataFrame()
-
-    return df_combined
+    # [workflow, job_date, rater_id, auditor_id, job_id] [r_label1, r_label2, a_label1, a_label2]
 
 
-def transform(df, metadata):
+    # Compile stats
+    stats["rows_final"] = len(result)
+    
+    return result
+
+
+def transform(df, module_info):
     stats = {}
     stats["etl_module"] = "UQD"
-    stats["rows_before_transformation"] = len(df)
 
-    binary_labels = transformer_utils.get_binary_labels(metadata)
-    excluded_labels = transformer_utils.get_excluded_labels(metadata)
-    use_extracted = transformer_utils.get_use_extracted(metadata)
-    quality_methods = transformer_utils.get_quality_methods(metadata)
+    #print("METADATA: {mod_config}")
 
-    logging.info(f"Transforming UQD data with {len(binary_labels)} binary labels and {len(excluded_labels)} excluded labels")
+    # Module config
+    mod_config = module_info.get("module_config")
+    quality_methodology = mod_config.get("quality_methodology")
+
+    logging.info(f"Transforming UQD data")
     
-    df = UQD_transform(df, stats, binary_labels, excluded_labels, use_extracted, quality_methods)
+    stats["rows_before_transformation"] = len(df)
+    df = UQD_transform(df, stats, mod_config)
     stats["rows_after_transformation"] = len(df)
+
     logging.info(f"Transformed UQD data: {len(df)} rows")
     
-    df = transformer_utils.enrich_dataframe_with_metadata(df, metadata)
-    logging.info(f"Enriched UQD data with metadata")
+    #df = transformer_utils.enrich_dataframe_with_metadata(df, metadata)
+    #logging.info(f"Enriched UQD data with metadata")
 
-    return df, stats
+
+
+    # UQD audit : base audit
+    # UQD golden: base audit
+    # UQD multi : base multi
+    
+    # Crea BASE CONFIG per BASE AUDIT
+    needs_auditor = True if quality_methodology == 'audit' or quality_methodology == 'golden' else False
+
+    binary_labels_dict = {
+        v["label_name"] : v["binary_positive_value"]
+        for v in mod_config.get("binary_labels", [])
+    }
+
+    module_info["base_config"] = {
+        "labels": [
+            {
+                "label_name": label,
+                "rater_label_column": f"r_{label}",
+                "is_label_binary": label in binary_labels_dict,
+                "label_binary_pos_value": binary_labels_dict.get(label),
+                "weight": 1,
+                "auditor_label_column": f"a_{label}" if needs_auditor else None,
+                "auditor_column_type": "answer" if needs_auditor else None,
+            }
+            for label in stats.get("label_list", [])
+        ]
+    }
+
+    base_config = module_info.get("base_config", {})
+    if quality_methodology == 'multi':
+        base_df, base_info = bmulti(df, base_config)
+    else:
+        base_df, base_info = baudit(df, base_config)
+    
+    stats["base_info"] = base_info
+    
+    return base_df, stats

@@ -18,50 +18,17 @@ logger = logging.getLogger('pipeline.utils')
 def load_project_info(filepath, sheet_name="Project List", active_only=False):
     logger.debug(f"Loading Project Masterfile (active_only parameter:{active_only})")
     df = pd.read_excel(filepath, sheet_name=sheet_name, engine='openpyxl')
+
+    underscore_columns = [col for col in df.columns if col.startswith("_")]
+    df_selected = df[underscore_columns].copy()
+    df_selected.columns = [col[1:] for col in df_selected.columns]
+    df = df_selected.copy()
     
-    df = df[df["Status"] != "Hidden"]  # Remove hidden projects
+    df = df[df["project_status"] != "Hidden"]  # Remove hidden projects
     
     if active_only:
-        df = df[df["Status"] == "Active"]  # Use only active projects
+        df = df[df["project_status"] == "Active"]  # Use only active projects
     
-    selected_columns = [
-        "_project_name",
-        "_project_id",
-        "_project_is_active",
-        "_project_status_string",
-        "_project_status_notes",
-        "_project_start_date",
-        "_project_end_date",
-        "_project_data_type",
-        "_metadata",
-        "_track_data",
-        "_folder_name",
-        "_target",
-        "_bool_multireview",
-        "_bool_audit"
-    ]
-    df_selected = df[selected_columns].copy()
-    df_selected.rename(columns={
-        "_project_name": "project_name",
-        "_project_id": "project_id",
-        "_project_is_active": "project_is_active",
-        "_project_status_string": "project_status",
-        "_project_status_notes": "notes",
-        "_project_start_date": "project_start_date",
-        "_project_end_date": "project_end_date",
-        "_metadata": "project_metadata",
-        "_track_data": "track_data",
-        "_folder_name": "project_folder_name",
-        "Data Type": "data_type",
-        #"_target": "_target",
-        #"_bool_multireview": "_bool_multireview",
-        #"_bool_audit": "_bool_audit"
-    }, inplace=True)
-    df = df_selected
-    logger.debug(f"Extracting file pattern from metadata")
-    df["file_pattern"] = df["project_metadata"].apply(extract_file_pattern_from_metadata)
-    df["header_hash"] = df["project_metadata"].apply(extract_header_hash_from_metadata)
-    # Returns Project List with Metadata and File Pattern
     logger.debug(f"Returning Project List")
     return df
 
@@ -70,21 +37,14 @@ def filter_inactive_projects(new_entries_df, project_df):
     merged_df = new_entries_df.merge(active_projects[["project_id"]], on="project_id", how="inner")
     return merged_df
 
-# --- Extract File Pattern from Project Metadata
 
-def extract_file_pattern_from_metadata(metadata_str):
-    logger.debug(f"Extracting file pattern from metadata: {metadata_str}")
-    try:
-        metadata = json.loads(metadata_str)
-    except (json.JSONDecodeError, TypeError):
-        logger.debug(f"JSONDecodeError while decoding {metadata_str}. Returning None")
-        return None
+# --- Extract File Pattern from Project Config
 
-    format_info = metadata.get("datafile_format", {})
+def extract_file_pattern(files_filter_dict):
 
-    starts = format_info.get("starts", "")
-    ends = format_info.get("ends", "")
-    contains = format_info.get("contains", [])
+    starts = files_filter_dict.get("begins_with", "")
+    ends = files_filter_dict.get("ends_with", "")
+    contains = files_filter_dict.get("contains", [])
 
     # Normalize contains
     if isinstance(contains, str):
@@ -111,23 +71,9 @@ def extract_file_pattern_from_metadata(metadata_str):
     else:
         pattern += ".*$"
     
-    logger.debug(f"Pattern extracted. Metadata: {metadata_str} >>> Pattern: {pattern}")
+    logger.debug(f"Pattern extracted. Metadata: {files_filter_dict} >>> Pattern: {pattern}")
     return pattern
 
-def extract_header_hash_from_metadata(metadata_str):
-    logger.debug(f"Extracting header hash from metadata: {metadata_str}")
-    try:
-        metadata = json.loads(metadata_str)
-    except (json.JSONDecodeError, TypeError):
-        logger.debug(f"JSONDecodeError while decoding {metadata_str}. Returning None")
-        return None
-
-    hash_info = metadata.get("header_hash", None)
-    if not hash_info:
-        logger.debug(f"No header hash found in metadata: {metadata_str}. Returning None")
-        return None
-    
-    return hash_info
 
 
 def get_project_target(project_id, project_list):
@@ -136,7 +82,7 @@ def get_project_target(project_id, project_list):
         logger.error(f"Get-Project-Target: Project ID '{project_id}' not found in project list")
         return None
     
-    raw_target = match["_target"].iloc[0]
+    raw_target = match["project_target"].iloc[0]
 
     try:
         # String with %
@@ -162,18 +108,22 @@ def get_project_methodology(project_id, project_list):
         logger.error(f"Get-Project-Methodology: Project ID '{project_id}' not found in project list")
         return None
     
-    raw_value = match["_bool_multireview"].iloc[0]
+    project_methodology = project_methodology = match.iloc[0]["project_methodology"]
+    #methodology_map = {
+    #    "Audits": "audit",
+    #    "Spot-check": "audit",
+    #    "Golden Sets": "audit",
+    #    "Quiz Sets": "audit",
+    #    "Multi-Review": "multi",
+    #    "Rubric": "rubric"
+    #}
 
-    try:
-        if isinstance(raw_value, str):
-            val = raw_value.strip().lower()
-            is_multi = val in ['1', 'true', 'yes', 'y']
-        else:
-            is_multi = bool(raw_value)
-    except Exception as e:
-        logger.error(f"Get-Project-Methodology: Error interpreting value '{raw_value}' for project '{project_id}': {e}")
-        return None
-    return "multi" if is_multi else "audit"
+    #result = methodology_map.get(project_methodology)
+    result = project_methodology
+    if result is None:
+        logger.error(f"Unknown project methodology '{project_methodology}' for project ID '{project_id}'")
+    return result
+
 
 # DATES
 
@@ -205,6 +155,7 @@ def generate_we_dates(start_date, end_date=None):
 
     end_friday = get_friday_of_week(end_date)
     return [first_friday + timedelta(weeks=i) for i in range(((end_friday - first_friday).days // 7) + 1)]
+
 
 
 # Extracts list of weekendings from transformed dataframes' data
