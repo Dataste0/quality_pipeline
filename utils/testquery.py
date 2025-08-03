@@ -15,11 +15,26 @@ import pipeline_lib.config as cfg
 
 DATA_PARQUET_BASE_PATH = cfg.DATA_PARQUET_DIR_PATH
 BASE_DIR = "/home/steco/quality_pipeline/pipeline_lib/sql"
-QUERY_NAME = "smr-workflow"
+#QUERY_NAME = "smr-workflow"
+#QUERY_NAME = "smr-error-contribution"
+QUERY_NAME = "dmp-job-incorrect"
+TARGET = 0.9
+
+#rubric project
+#BASE = "rubric"
+#PROJECT_ID = "a01Hs00001ocUaxIAE"
+#REPORTING_WEEK = "7/11/2025"
+
+#audit project CVS
+#BASE = "audit"
+#PROJECT_ID = "a01Hs00001ocUa0IAE"
+#REPORTING_WEEK = "7/18/2025"
+
+#multi UQD
 BASE = "multi"
 PROJECT_ID = "a01Hs00001ocUiNIAU"
-REPORTING_WEEK = "04/18/2025"
-TARGET = 0.9
+REPORTING_WEEK = "4/18/2025"
+
 
 class SafeDict(dict):
     def __missing__(self, key):
@@ -36,11 +51,11 @@ def olap_rep_generate(query_name, base, project_id, reporting_week, target):
         return None
     
     query_map = {
-            'smr-workflow': f'smr_workflow_{base}.sql',
-            'smr-rater-label': f'query_{base}_smr_rater_label.sql',
-            'smr-job-label': f'query_{base}_smr_job_label.sql',
-            'smr-error-contribution': f'query_{base}_smr_error_contribution.sql',
-            'dmp-job-incorrect': f'query_{base}_dmp_job_incorrect.sql'
+            'smr-workflow':             f'smr_workflow_{base}.sql',
+            'smr-rater-label':          f'smr_rater_label_{base}.sql',
+            'smr-job-label':            f'smr_job_label_{base}.sql',
+            'smr-error-contribution':   f'smr_error_contribution_{base}.sql',
+            'dmp-job-incorrect':        f'dmp_job_incorrect_{base}.sql'
     }
 
     if query_name not in query_map:

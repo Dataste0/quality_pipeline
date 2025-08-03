@@ -108,7 +108,7 @@ def get_project_methodology(project_id, project_list):
         logger.error(f"Get-Project-Methodology: Project ID '{project_id}' not found in project list")
         return None
     
-    project_methodology = project_methodology = match.iloc[0]["project_methodology"]
+    project_methodology = match.iloc[0]["project_methodology"]
     #methodology_map = {
     #    "Audits": "audit",
     #    "Spot-check": "audit",
@@ -123,6 +123,18 @@ def get_project_methodology(project_id, project_list):
     if result is None:
         logger.error(f"Unknown project methodology '{project_methodology}' for project ID '{project_id}'")
     return result
+
+def get_project_base(project_id, project_list):
+    match = project_list[project_list["project_id"] == project_id]
+    if match.empty:
+        logger.error(f"Get-Project-Base: Project ID '{project_id}' not found in project list")
+        return None
+    
+    project_base = match.iloc[0]["project_base"]
+
+    if project_base is None:
+        logger.error(f"Unknown project methodology '{project_base}' for project ID '{project_id}'")
+    return project_base
 
 
 # DATES

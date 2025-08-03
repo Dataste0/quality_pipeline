@@ -6,7 +6,7 @@ import ast
 import pipeline_lib.config as cfg
 import pipeline_lib.pipeline_utils as pu
 from pipeline_lib.queues import TransformationQueueManager
-from pipeline_lib.sql.queryrun import query_run
+from pipeline_lib.sql.queryrun import olap_query_run
 
 OLAP_BASE_FOLDER = cfg.OLAP_EXPORT_DIR_PATH
 
@@ -26,15 +26,16 @@ project_list_df = pu.load_project_info(PROJECT_MASTERFILE, active_only=False)
 
 #### Generate csv reports
 
-def generate_olap_reports(project_id, week_ending, target, methodology):
-    week_ending = pd.to_datetime(week_ending, dayfirst=False, errors='raise').strftime("%Y-%m-%d")
-    olap_folder = os.path.join(OLAP_BASE_FOLDER, "Project_" + project_id, week_ending)
+def generate_olap_reports(project_id, project_base, reporting_week, target):
+    reporting_week_str = pd.to_datetime(reporting_week, errors="coerce").strftime("%Y-%m-%d")
+    olap_folder = os.path.join(OLAP_BASE_FOLDER, "O_" + project_id, reporting_week_str)
     os.makedirs(olap_folder, exist_ok=True)
     
-    for rep in ["smr-workflow", "smr-rater-label", "smr-job-label", "smr-error-contribution", "job-incorrect"]:
-        report_type = rep
-        report_name = project_id + "_" + week_ending + "_" + methodology + "_" + report_type + ".csv"
-        report_df = query_run(report_type, project_id, week_ending, target, methodology)
+    for query_name in ["smr-workflow", "smr-rater-label", "smr-job-label", "smr-error-contribution", "dmp-job-incorrect"]:
+        report_name = project_id + "_" + reporting_week_str + "_" + project_base + "_" + query_name + ".csv"
+        
+        report_df = olap_query_run(query_name, project_base, project_id, reporting_week, target)
+        
         report_path = os.path.join(olap_folder, report_name)
         pu.save_df_to_filepath(report_df, report_path)
 
@@ -54,29 +55,17 @@ def olap_sync():
             logger.warning(f"Queue empty before expected!")
             break
         olap_sync_item_id = olap_sync_item['item_id']
-        print(f"[{i+1}/{total_olap_sync_items}] Processing ID {olap_sync_item_id}: {olap_sync_item['project_id']} | {olap_sync_item['project_name']} // {olap_sync_item['content_weeks']}")
+        print(f"[{i+1}/{total_olap_sync_items}] Processing ID {olap_sync_item_id}: {olap_sync_item['project_id']} | {olap_sync_item['project_name']} // {olap_sync_item['data_week']}")
 
         project_id = olap_sync_item['project_id']
         target = pu.get_project_target(project_id, project_list_df)
-        methodology = pu.get_project_methodology(project_id, project_list_df)
+        project_base = pu.get_project_base(project_id, project_list_df)
 
-        print(f"\nTarget: {target} - Methodology: {methodology}")
+        #print(f"\nTarget: {target} - Project Base: {project_base}")
         
-        content_weeks = ast.literal_eval(olap_sync_item['content_weeks'])
-        failed = 0
-        for week_ending in content_weeks:
-            
-            # Itera le content week per aggiornare gli olap square
-            # Fornisco project_id, data_week, filename per rintracciare il file UQ sorgente
-            # Fornisco content_week per identificare lo square di destinazione
-            if failed == 0:
-                outcome = generate_olap_reports(project_id, week_ending, target, methodology)
-                if not outcome:
-                    failed +=1
-                
-            # OUTCOME IS POSITIVE FOR ALL CONTENT_WEEKS
-
-        if not failed:
+        reporting_week = olap_sync_item['data_week']
+        outcome_success = generate_olap_reports(project_id, project_base, reporting_week, target)
+        if outcome_success:
             #print("Olap Sync SUCCESS!")
             transformation_queue.mark_olap_synced(olap_sync_item_id)
         else:

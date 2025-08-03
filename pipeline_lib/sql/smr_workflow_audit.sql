@@ -28,7 +28,7 @@ auditor_count AS (
 ),
 
 -- Jobs correct
-rater_jobs_correct_labels AS (
+rater_correct_jobs_labels AS (
     SELECT 
         week_ending, 
         project_id, 
@@ -44,20 +44,21 @@ rater_jobs_correct_labels AS (
     FROM alldata
     GROUP BY week_ending, project_id, workflow, rater_id, job_id
 ),
-rater_jobs_correct AS (
+rater_correct_jobs AS (
     SELECT 
         week_ending, 
         project_id, 
         workflow, 
         rater_id, 
-        COUNT(*) as rater_jobs, 
+        COUNT(*) as rated_jobs, 
+        COUNT(*) as audited_jobs,
         SUM(correct_labels) as correct_labels, 
         SUM(tot_labels) as tot_labels,
         SUM(tp_count) as tp_count,
         SUM(tn_count) as tn_count,
         SUM(fp_count) as fp_count,
         SUM(fn_count) as fn_count
-    FROM rater_jobs_correct_labels
+    FROM rater_correct_jobs_labels
     GROUP BY week_ending, project_id, workflow, rater_id
 )
 ,
@@ -69,7 +70,7 @@ rater_score AS (
         CASE WHEN tp_count+fp_count+fn_count = 0 THEN NULL ELSE (2 * tp_count)/((2 * tp_count) + fp_count + fn_count)::FLOAT END AS rater_f1score,
         CASE WHEN tp_count+fp_count = 0 THEN NULL ELSE tp_count/(tp_count + fp_count)::FLOAT END AS rater_precision,
         CASE WHEN tp_count+fn_count = 0 THEN NULL ELSE tp_count/(tp_count + fn_count)::FLOAT END AS rater_recall
-    FROM rater_jobs_correct
+    FROM rater_correct_jobs
 ),
 raters_above_target AS (
     SELECT
@@ -85,8 +86,8 @@ workflow_jobs_correct AS (
         project_id, 
         workflow, 
         COUNT(*)::INT as rater_count,
-        SUM(rater_jobs)::INT as rated_jobs, 
-        SUM(rater_jobs)::INT as audited_jobs,
+        SUM(rated_jobs)::INT as rated_jobs, 
+        SUM(audited_jobs)::INT as audited_jobs,
         SUM(correct_labels)::INT as correct_labels, 
         SUM(tot_labels)::INT as tot_labels,
         SUM(tp_count)::INT as tp_count,
@@ -120,5 +121,25 @@ workflow_info AS (
     USING (week_ending, project_id, workflow)
 )
 
-SELECT * FROM workflow_info
-
+SELECT
+    project_id,
+    week_ending,
+    workflow,
+    rater_count,
+    auditor_count,
+    rated_jobs as job_instances,
+    audited_jobs as audited_instances,
+    tot_labels as label_count,
+    correct_labels as correct_label_count,
+    tp_count,
+    tn_count,
+    fp_count,
+    fn_count,
+    target_goal,
+    raters_above_target,
+    raters_above_target_f1,
+    workflow_score,
+    workflow_f1score,
+    workflow_precision,
+    workflow_recall
+FROM workflow_info

@@ -11,11 +11,12 @@
 
 import pandas as pd
 import numpy as np
-import logging
+
 from pipeline_lib.project_transformers import transformer_utils
 
 MODEL_BASE = "rubric"
 
+DEFAULT_RUBRIC_NAME = "default_rubric"
 
 
 def unpivot_labels(df, stats, group_cols, label_columns):
@@ -48,7 +49,7 @@ def base_rubric_etl(df, stats, base_config):
         base_cols_list = ['workflow', 'job_date', 'rater_id', 'auditor_id', 'job_id', 'job_correct', 'job_score']
         rubric_list = [d.get("rubric_name") for d in rubric_items]
         rubric_cols_list = [d.get("rubric_column") for d in rubric_items]
-        
+       
 
         required_cols = base_cols_list + rubric_cols_list
         # Verifica che esistano nel df
@@ -60,11 +61,17 @@ def base_rubric_etl(df, stats, base_config):
 
         df = df[required_cols].copy()
 
-
         # Strip quotes from ID Columns
         for col in ["rater_id", "auditor_id", "job_id"]:
             df[col] = df[col].astype("string").str.strip("'")
-        
+
+
+        # Replace empty workflow with "default_workflow"
+        df['workflow'] = df['workflow'].fillna('').astype(str)
+        df.loc[df['workflow'].str.strip().str.lower() == '', 'workflow'] = 'default_workflow'
+
+        # Replace empty auditor_id with Na
+        df['auditor_id'] = df['auditor_id'].replace(r'^\s*$', np.nan, regex=True)
 
         
         # Convert rubric columns to int values
@@ -72,7 +79,7 @@ def base_rubric_etl(df, stats, base_config):
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
         
         # Add main_label column
-        default_rubric_name = base_config.get("default_rubric_name", "default_fallback_rubric")
+        default_rubric_name = DEFAULT_RUBRIC_NAME
         df[default_rubric_name] = 1
 
 
@@ -87,6 +94,7 @@ def base_rubric_etl(df, stats, base_config):
         #print(f"UNPIV\n {unpivoted_df.head()}")
         #unpivoted_df.to_csv('test_unpivoted_halorubric.csv', index=False)
 
+        
         # Assign penalties
         df["factor"] = pd.to_numeric(df["factor"], errors="coerce").fillna(1)
         
@@ -99,24 +107,30 @@ def base_rubric_etl(df, stats, base_config):
         #   rubric_name : rubric_penalty
         # }
 
+        # Add rubric score
         df["rubric_penalty"] = df["rubric"].map(penalty_map)
         base_score = df["rubric_penalty"] * df["factor"]
-        df["rubric_score"] = np.where(base_score > 0, base_score * -1, base_score)
-        
-        # Add default label
-        top_score = base_config.get("top_score", 100)
-        df.loc[df["rubric"] == default_rubric_name, "rubric_score"] = top_score / 100
+        df["rubric_score"] = np.where(
+            df["auditor_id"].isna(),
+            np.nan,
+            np.where(
+                df["rubric"] == default_rubric_name,
+                1,
+                np.where(base_score > 0, base_score * -1, base_score)
+            )
+        )
         
         # Reorder
-        final_cols = ['workflow', 'job_date', 'rater_id', 'auditor_id', 'job_id', 'job_correct', 'job_score', 'rubric', 'rubric_penalty', 'factor', 'rubric_score']
-        df = df[final_cols].copy()
+        final_cols = ['workflow', 'job_date', 'rater_id', 'auditor_id', 'job_id', 'job_correct', 'job_score', \
+                      'rubric', 'rubric_penalty', 'factor', 'rubric_score']
+        df = df[final_cols]
 
         # OUTPUT ['workflow', 'job_date', 'rater_id', 'auditor_id', 'job_id', 'job_correct', 'job_score', 'rubric', 'rubric_penalty', 'factor', 'rubric_score']
         return df
 
     except Exception as e:
         stats["transform_error"] = f"Unexpected error: {str(e)}"
-        print(f"HALO RUBRIC MODULE ERROR: Unexpected error: {str(e)}")
+        print(f"BASE RUBRIC ERROR: Unexpected error: {str(e)}")
         return None
 
 

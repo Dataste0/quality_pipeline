@@ -253,7 +253,7 @@ def base_audit_etl(df, stats, base_config):
     except Exception as e:
         tb = traceback.format_exc()
         stats["transform_error"] = f"Unexpected error: {e}"
-        print(f"BASE AUDIT MODULE ERROR: Unexpected error: {e}\n{tb}")
+        print(f"BASE AUDIT ERROR: Unexpected error: {e}\n{tb}")
         return None
         
 

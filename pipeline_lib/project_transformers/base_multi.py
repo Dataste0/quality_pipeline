@@ -69,10 +69,12 @@ def base_multi_etl(df, stats, base_config):
             var_name="label_role",
             value_name="rater_response"
         )
+        
 
         df_unpivoted[["parent_label", "role"]] = df_unpivoted["label_role"].str.rsplit("|", n=1, expand=True)
 
         # ["workflow", "job_date", "rater_id", "job_id"] [is_rateable|rater] [withhold|rater]
+        df = df_unpivoted
 
         binary_map = {
             d["label_name"]: bool(d.get("is_label_binary", False))
@@ -103,7 +105,7 @@ def base_multi_etl(df, stats, base_config):
 
     except Exception as e:
         stats["transform_error"] = f"Unexpected error: {str(e)}"
-        print(f"BASE AUDIT MODULE ERROR: Unexpected error: {str(e)}")
+        print(f"BASE MULTI ERROR: Unexpected error: {str(e)}")
         return None
 
 

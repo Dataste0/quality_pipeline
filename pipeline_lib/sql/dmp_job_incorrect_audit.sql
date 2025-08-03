@@ -1,4 +1,3 @@
--- Dedupe
 WITH alldata AS (
     SELECT 
         *, 
@@ -18,7 +17,18 @@ WITH alldata AS (
     WHERE row_num = 1
 )
 
-SELECT *
+
+SELECT 
+    week_ending,
+    project_id,
+    workflow,
+    rater_id,
+    job_id,
+    parent_label,
+    rater_response,
+    auditor_response as ground_truth,
+    confusion_type,
+    is_correct
 FROM alldata
-WHERE is_correct = 0
-LIMIT 5000
+WHERE NOT is_correct OR is_correct = 0
+LIMIT 1000

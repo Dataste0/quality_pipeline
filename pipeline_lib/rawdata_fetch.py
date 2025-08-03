@@ -250,7 +250,6 @@ def scan_rawdata_project_folder(
 # --- Scans all projects in Project List (Generates: current Snapshot)
 def scan_rawdata(project_df, raw_data_root, last_snapshot, create_missing):
     logger.debug("Starting scan of rawdata folders.")
-    project_df.to_csv('miotest.csv')
 
     if not os.path.exists(raw_data_root):
         logger.error(f"Raw data root folder not found: {raw_data_root}. Aborting.")

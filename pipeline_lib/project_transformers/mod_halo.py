@@ -39,7 +39,6 @@ def halo_transform(df, stats, mod_config):
                   "manual_score_column": "Vendor Manual QA Score"
               },
 
-              "top_score": 100,
               "bottom_score": 80,
               "default_rubric_name": "main_rubric",
               "use_job_score_provided": true,
@@ -73,7 +72,6 @@ def halo_transform(df, stats, mod_config):
     use_job_score_provided  = mod_config.get("use_job_score_provided", False)
     use_job_outcome_provided= mod_config.get("use_job_outcome_provided", False)
     incorrect_if_commented  = mod_config.get("incorrect_if_commented", False)
-    top_score               = int(mod_config.get("top_score", 100)) /100
     bottom_score            = int(mod_config.get("bottom_score", 0)) /100
     pass_score              = int(mod_config.get("pass_score", 100)) /100
     default_rubric_name     = mod_config.get("default_rubric_name", "default_rubric")
@@ -174,7 +172,7 @@ def halo_transform(df, stats, mod_config):
         else:
             total_penalty_series = 0
 
-        df["job_score"] = top_score - total_penalty_series
+        df["job_score"] = 1 - total_penalty_series
         df["job_score"] = df["job_score"].clip(lower=bottom_score)
 
 
@@ -259,8 +257,6 @@ def transform(df, module_info):
 
     # Crea BASE CONFIG per BASE RUBRIC
     rubric_list = mod_config.get("rubric", [])
-    default_rubric_name = mod_config.get("default_rubric_name", "default_rubric")
-    top_score = mod_config.get("top_score", 100)
 
     base_config = {
         "rubric": [
@@ -271,8 +267,6 @@ def transform(df, module_info):
             }
             for rubric in rubric_list if rubric["rubric_name"] in stats.get("rubric_list", [])
         ],
-        "default_rubric_name": default_rubric_name,
-        "top_score": top_score
     }
 
     module_info["base_config"] = base_config
