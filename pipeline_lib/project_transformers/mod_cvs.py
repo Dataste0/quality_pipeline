@@ -1,11 +1,12 @@
 import pandas as pd
 import json
-import logging
+
 from pipeline_lib.project_transformers import transformer_utils
 from pipeline_lib.project_transformers.base_audit import base_transform as baudit
 
-# --- Setup logger
-logger = logging.getLogger('pipeline.transform_modules')
+# --- Logger
+import logging
+logger = logging.getLogger(__name__)
 
 
 # CVS Default Columns
@@ -16,6 +17,8 @@ CVS_SUBMISSION_DATE_COL_NAME = "sample_ds"
 CVS_WORKFLOW_COL_NAME = "routing_name"
 CVS_RATER_DECISION_DATA_COL_NAME = "rater_decision_data"
 CVS_AUDITOR_DECISION_DATA_COL_NAME = "auditor_decision_data"
+
+
 
 # Output to BASE AUDIT
 # [workflow, job_date, rater_id, auditor_id, job_id] [r_label1, a_label1] [r_label2, a_label2] ...
@@ -131,7 +134,7 @@ def CVS_transform(df, stats, mod_config):
           }      
     """
 
-    quality_methodology = mod_config.get("quality_methodology", None)
+    quality_methodology = "audit"
     excluded_list = mod_config.get("excluded_labels", [])
     binary_labels = mod_config.get("binary_labels", [])
     stats["quality_methodology"] = quality_methodology
@@ -141,13 +144,13 @@ def CVS_transform(df, stats, mod_config):
 
     # Map columns
     column_map = {
-        CVS_RATER_ID_COL_NAME           : "rater_id",
-        CVS_AUDITOR_ID_COL_NAME         : "auditor_id",
-        CVS_JOB_ID_COL_NAME             : "job_id",
-        CVS_SUBMISSION_DATE_COL_NAME    : "job_date",
-        CVS_WORKFLOW_COL_NAME           : "workflow",
-        CVS_RATER_DECISION_DATA_COL_NAME : "rater_decision_data",
-        CVS_AUDITOR_DECISION_DATA_COL_NAME : "auditor_decision_data"
+        CVS_RATER_ID_COL_NAME                   : "rater_id",
+        CVS_AUDITOR_ID_COL_NAME                 : "auditor_id",
+        CVS_JOB_ID_COL_NAME                     : "job_id",
+        CVS_SUBMISSION_DATE_COL_NAME            : "job_date",
+        CVS_WORKFLOW_COL_NAME                   : "workflow",
+        CVS_RATER_DECISION_DATA_COL_NAME        : "rater_decision_data",
+        CVS_AUDITOR_DECISION_DATA_COL_NAME      : "auditor_decision_data"
     }
     df.rename(columns=column_map, inplace=True)
 
@@ -210,7 +213,7 @@ def CVS_transform(df, stats, mod_config):
         keys = []
         for col in expanded_df.columns:
             if col.startswith(f"{prefix}_"):
-                keys.append(col[len(prefix)+1 :])  # rimuove "x_rater_" o "x_auditor_"
+                keys.append(col[len(prefix)+1 :])  # rimuove "r_" o "a_"
         return set(keys)
 
     rater_keys = extract_labels(rater_labels_pivoted, "r")
@@ -226,15 +229,22 @@ def CVS_transform(df, stats, mod_config):
     to_concat = [base_df, rater_labels_pivoted, auditor_labels_pivoted]
     result = pd.concat(to_concat, axis=1)
 
-    result = result.drop(columns=["rater_labels", "auditor_labels"], errors="ignore")
+    df = result.drop(columns=["rater_labels", "auditor_labels"], errors="ignore")
+
+    df.rename(columns={
+        col: col.replace("r_", "rater_", 1) if col.startswith("r_") else
+            col.replace("a_", "auditor_", 1) if col.startswith("a_") else col
+        for col in df.columns
+    }, inplace=True)
     
-    # [workflow, job_date, rater_id, auditor_id, job_id] [r_label1, a_label1] [r_label2, a_label2] ...
+    # [workflow, job_date, rater_id, auditor_id, job_id] [rater_label1, auditor_label1] [rater_label2, auditor_label2] ...
 
     # Compile stats
-    stats["rows_final"] = len(result)
+    stats["rows_final"] = len(df)
 
+    print(f"DONE MODULE: {df.columns}")
 
-    return result
+    return df
 
 
 def transform(df, module_info):
@@ -262,8 +272,6 @@ def transform(df, module_info):
         "labels": [
             {
                 "label_name": label,
-                "rater_label_column": f"r_{label}",
-                "auditor_label_column": f"a_{label}",
                 "auditor_column_type": "answer",
                 "is_label_binary": label in pos_label_map,
                 "label_binary_pos_value": pos_label_map.get(label, ""),

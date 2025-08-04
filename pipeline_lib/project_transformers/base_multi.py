@@ -43,21 +43,29 @@ def base_multi_etl(df, stats, base_config):
     }
     """
 
+
+
+
+
+
+
     try:
         label_dicts = base_config.get("labels", [])
 
         # Map label columns
-        label_column_map = {}
-        for v in label_dicts:
-            label_column_map[v['rater_label_column']]       = f"{v['label_name']}|rater"
+        label_column_map = {
+            f"rater_{v['label_name']}": f"{v['label_name']}|rater"
+            for v in label_dicts
+        }
         df = df.rename(columns=label_column_map)
-        
+
+       
         # Needed columns
         info_columns = ["workflow", "job_date", "rater_id", "job_id"]
         label_cols_renamed = list(label_column_map.values())
 
         required_df_cols = info_columns + label_cols_renamed
-        df = df[[col for col in required_df_cols if col in df.columns]]
+        df = df.loc[:, [col for col in required_df_cols if col in df.columns]]
 
 
         # ["workflow", "job_date", "rater_id", "job_id"] [is_rateable|rater] [withhold|rater] ...
@@ -131,5 +139,7 @@ def base_transform(df, base_config):
 
     # Add project_id...
     #df = transformer_utils.enrich_dataframe_with_metadata(df, metadata)
+
+    df.to_csv("base_multi_debug_output.csv", index=False)
 
     return df, stats

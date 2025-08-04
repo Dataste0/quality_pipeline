@@ -1,31 +1,28 @@
 import os
 import pandas as pd
 import re
-import ast
-import logging
 import json
+
 import pipeline_lib.pipeline_utils as pu
 from pipeline_lib.queues import SnapshotManager, TransformationQueueManager
 import pipeline_lib.config as cfg
 
 RAW_DATA_ROOT = cfg.RAWDATA_ROOT_PATH
 
-SNAPSHOT_QUEUE_FILE = cfg.SNAPSHOT_FILE_PATH
-TRANSFORMATION_QUEUE_FILE = cfg.QUEUE_TRANSFORMATION_FILE_PATH
-
-PROJECT_MASTERFILE = cfg.PROJECT_INFO_FILE_PATH
-
 
 # --- Setup queues
+SNAPSHOT_QUEUE_FILE = cfg.SNAPSHOT_FILE_PATH
+TRANSFORMATION_QUEUE_FILE = cfg.QUEUE_TRANSFORMATION_FILE_PATH
 snapshot_queue = SnapshotManager(SNAPSHOT_QUEUE_FILE)
 transformation_queue = TransformationQueueManager(TRANSFORMATION_QUEUE_FILE)
 
-# --- Setup logger
-logger = logging.getLogger('pipeline.fetch')
-
 # --- Setup Project List
+PROJECT_MASTERFILE = cfg.PROJECT_INFO_FILE_PATH
 project_list_df = pu.load_project_info(PROJECT_MASTERFILE, active_only=False)
 
+# --- Logger
+import logging
+logger = logging.getLogger(__name__)
 
 # --- Scan weekly data folder
 def scan_rawdata_week_folder(
@@ -175,7 +172,10 @@ def scan_rawdata_project_folder(
         f"Scanning project folder: {project_name} | create_missing={create_missing}, hash={hash}"
     )
 
+    print(f"TEST PROJECT METADATA PRIMA DI JSON LOADS: {project_metadata}\n")
+    print(f"TYPE METADATA: {type(project_metadata)}\n")
     metadata_dict = json.loads(project_metadata)
+    print(f"TEST MEDATADA DICT DOPO PARSING: {metadata_dict}\n")
     project_config_list = metadata_dict.get("project_config", [])
     scan_log = []
     

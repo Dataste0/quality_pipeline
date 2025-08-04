@@ -53,10 +53,19 @@ def transform(df, metadata):
     df = adhoc_transform(df)
 
     # Force use_extracted:False
-    metadata["use_extracted"] = False
+    mod_info = {
+        "module": "UQD",
+        "module_config": {
+            "use_extracted": False,
+            "quality_methodology": "multi",
+            "excluded_labels": ["hallucination_example", "omit_example"],
+            "binary_labels": []
+        }
+    }
 
-    df, df_stats = uqd_transform(df, metadata)
-    stats["transformation"] = df_stats
+
+    df, df_stats = uqd_transform(df, mod_info)
+    stats["etl"] = df_stats
 
     stats["rows_after_transformation"] = len(df)
     return df, stats

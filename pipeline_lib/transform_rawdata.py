@@ -2,31 +2,26 @@ import os
 import traceback
 import json
 import pandas as pd
-import logging
+
 import pipeline_lib.pipeline_utils as pu
 import pipeline_lib.config as cfg
 from pipeline_lib.project_transformers.dispatcher import process_dataframe
 from pipeline_lib.queues import TransformationQueueManager
 
 RAWDATA_BASE_DIR = cfg.RAWDATA_ROOT_PATH
-
-PARQUET_BASE_DIR = os.path.join(cfg.DATA_TRANSFORMED_DIR_PATH, cfg.PARQUET_DIR)
-
-TRANSFORMATION_QUEUE_FILE = cfg.QUEUE_TRANSFORMATION_FILE_PATH
-
-PROJECT_MASTERFILE = cfg.PROJECT_INFO_FILE_PATH
-
+PARQUET_BASE_DIR = os.path.join(cfg.DATA_TRANSFORMED_DIR_PATH)
 
 # --- Setup queues
+TRANSFORMATION_QUEUE_FILE = cfg.QUEUE_TRANSFORMATION_FILE_PATH
 transformation_queue = TransformationQueueManager(TRANSFORMATION_QUEUE_FILE)
 
-# --- Setup logger
-logger = logging.getLogger('pipeline.transform')
-
 # --- Setup Project List
+PROJECT_MASTERFILE = cfg.PROJECT_INFO_FILE_PATH
 project_list_df = pu.load_project_info(PROJECT_MASTERFILE, active_only=False)
 
-
+# --- Logger
+import logging
+logger = logging.getLogger(__name__)
 
 
 # --- Process file by selecting the proper transformer and saves it to an output path as transformed
@@ -56,10 +51,13 @@ def process_file(raw_file_path, project_id, metadata, data_week):
         
         module_found = False
         modules_available = metadata.get("project_config", [])
+        #print(f"\nTRANSFORM RAWDATA - DEBUG metadata: {metadata}")
         for module_info in modules_available:
             dataset_fingerprint = module_info.get("dataset_fingerprint", None)
             if dataset_fingerprint == file_fingerprint:
                 module_found = True
+                #print(f"\nTRANSFORM RAWDATA - DEBUG module info: {module_info}")
+                module_info['project_id'] = metadata['project_id'] # Add project id to module info for dispatching ADHOC modules
                 df_transformed, transformed_dict = process_dataframe(df, module_info)
                 process_file_dict["transform_info"] = {"project_id": metadata["project_id"], "project_name": metadata["project_name"]} | transformed_dict
 
@@ -77,7 +75,11 @@ def process_file(raw_file_path, project_id, metadata, data_week):
         logger.debug(f"Done processing dataframe.")
         #print(f"\nTransformer DICT READ::{transformed_dict}")
 
-        model_base = transformed_dict["etl"]["base_info"]["model_base"]
+        if "etl" in transformed_dict["etl"]:
+            model_base = transformed_dict["etl"]["etl"]["base_info"]["model_base"]
+        else:
+            model_base = transformed_dict["etl"]["base_info"]["model_base"]
+        
         base_code = None
         if isinstance(model_base, str) and model_base.startswith("BASE-") and len(model_base) > 5:
             base_code = model_base[5]

@@ -4,13 +4,13 @@ import json
 import re
 import os
 import ast
-import logging
 import hashlib
 import zipfile
 from datetime import datetime, timedelta
 
-# --- Setup logger
-logger = logging.getLogger('pipeline.utils')
+# --- Logger
+import logging
+logger = logging.getLogger(__name__)
 
 
 # --- Load Project Masterfile DF
@@ -390,9 +390,10 @@ def hash_header(file_path):
         df = pd.read_excel(file_path, nrows=0, dtype=str)
     else:
         raise ValueError(f"Hash_Header - Unsupported file type: {file_path}")
-
-    header_string = '|'.join(df.columns.astype(str)).strip()
-
+    
+    # Hash of sorted columns
+    sorted_columns = sorted(df.columns.astype(str))
+    header_string = '|'.join(sorted_columns).strip()
     md5_hash = hashlib.md5(header_string.encode('utf-8')).hexdigest()
 
     return md5_hash

@@ -6,13 +6,15 @@
 import pandas as pd
 import json
 import re
-import logging
 from pipeline_lib.project_transformers import transformer_utils
 from pipeline_lib.project_transformers.base_audit import base_transform as baudit
 from pipeline_lib.project_transformers.base_multi import base_transform as bmulti
 
-# --- Setup logger
-logger = logging.getLogger('pipeline.transform_modules')
+# --- Logger
+import logging
+logger = logging.getLogger(__name__)
+
+
 
 # UQD Default Columns
 UQD_RATER_ID_COL_NAME = "actor_id"
@@ -282,10 +284,10 @@ def UQD_transform(df, stats, mod_config):
     df.drop_duplicates(subset=["rater_id", "job_id"], keep="last", inplace=True)
     
     # Expand key values
-    rater_labels_pivoted = expand_label_columns(df, "rater_labels", "r", excluded_list)
+    rater_labels_pivoted = expand_label_columns(df, "rater_labels", "rater", excluded_list)
     # costruisci la parte auditor solo se serve e c'è la colonna
     if needs_auditor and "auditor_labels" in df.columns:
-        auditor_labels_pivoted = expand_label_columns(df, "auditor_labels", "a", excluded_list)
+        auditor_labels_pivoted = expand_label_columns(df, "auditor_labels", "auditor", excluded_list)
     else:
         auditor_labels_pivoted = pd.DataFrame(index=df.index)  # placeholder vuoto
 
@@ -301,8 +303,8 @@ def UQD_transform(df, stats, mod_config):
                 keys.append(col[len(prefix)+1 :])  # rimuove "r_" o "a_"
         return set(keys)
 
-    rater_keys = extract_labels(rater_labels_pivoted, "r")
-    auditor_keys = extract_labels(auditor_labels_pivoted, "a") if needs_auditor else set()
+    rater_keys = extract_labels(rater_labels_pivoted, "rater")
+    auditor_keys = extract_labels(auditor_labels_pivoted, "auditor") if needs_auditor else set()
     all_labels = sorted(rater_keys.union(auditor_keys))
     stats["label_list"] = all_labels
     
@@ -328,6 +330,8 @@ def UQD_transform(df, stats, mod_config):
 
     # Compile stats
     stats["rows_final"] = len(result)
+
+    print(f"DEBUG RESULT UQD MODULE: {result.columns}")
     
     return result
 
@@ -367,15 +371,14 @@ def transform(df, module_info):
         for v in mod_config.get("binary_labels", [])
     }
 
+
     module_info["base_config"] = {
         "labels": [
             {
                 "label_name": label,
-                "rater_label_column": f"r_{label}",
                 "is_label_binary": label in binary_labels_dict,
                 "label_binary_pos_value": binary_labels_dict.get(label),
                 "weight": 1,
-                "auditor_label_column": f"a_{label}" if needs_auditor else None,
                 "auditor_column_type": "answer" if needs_auditor else None,
             }
             for label in stats.get("label_list", [])

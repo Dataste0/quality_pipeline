@@ -6,10 +6,11 @@ import pandas as pd
 import numpy as np
 from pipeline_lib.project_transformers import transformer_utils
 from pipeline_lib.project_transformers.base_rubric import base_transform as brubric
-import logging
 
-# --- Setup logger
-logger = logging.getLogger('pipeline.transform_modules')
+# --- Logger
+import logging
+logger = logging.getLogger(__name__)
+
 
 
 # Halo Default Columns
@@ -17,7 +18,6 @@ HALO_RATER_ID_COL_NAME = "SRT Annotator ID"
 HALO_AUDITOR_ID_COL_NAME = "Vendor Auditor ID"
 HALO_JOB_ID_COL_NAME = "SRT Job ID"
 HALO_JOB_DATE_COL_NAME = "Time (PT)"
-HALO_WORKFLOW_COL_NAME = "Rubric Name"
 HALO_VENDOR_TAG_COL = "Vendor Tag"
 HALO_VENDOR_COMMENT_COL = "Vendor Comment"
 HALO_VENDOR_SCORE_COL = "Vendor Manual QA Score"
@@ -27,7 +27,7 @@ def halo_transform(df, stats, mod_config):
     """
     MOD-CONFIG DICTIONARY FORMAT
 
-    mod_config = {
+    module_config = {
               "info_columns": {
                   "rater_id_column": "Annotator ID",
                   "auditor_id_column": "Vendor Auditor ID",
@@ -43,8 +43,8 @@ def halo_transform(df, stats, mod_config):
               "default_rubric_name": "main_rubric",
               "use_job_score_provided": true,
               "use_job_outcome_provided": false,
-              "pass_score": 100,
               "incorrect_if_commented": true,
+              "pass_score": 100,
               
               "rubric": [
                   {
@@ -83,37 +83,45 @@ def halo_transform(df, stats, mod_config):
     auditor_id_col          = info.get("auditor_id_column", HALO_AUDITOR_ID_COL_NAME)
     job_date_col            = info.get("submission_date_column", HALO_JOB_DATE_COL_NAME)
     job_id_col              = info.get("job_id_column", HALO_JOB_ID_COL_NAME)
-    workflow_col            = info.get("workflow_column", HALO_WORKFLOW_COL_NAME)
+    workflow_col            = info.get("workflow_column", None)
     vendor_tag_col          = info.get("vendor_tag_column", HALO_VENDOR_TAG_COL)
     vendor_comment_col      = info.get("vendor_comment_column", HALO_VENDOR_COMMENT_COL)
     vendor_score_col        = info.get("vendor_score_column", HALO_VENDOR_SCORE_COL)
+
+    df["wf_col_placeholder"] = "default_workflow"
     
     info_columns_map = {
         rater_id_col            : "rater_id",
         auditor_id_col          : "auditor_id",
         job_date_col            : "job_date",
         job_id_col              : "job_id",
-        workflow_col            : "workflow",
     }
+    if workflow_col:
+        info_columns_map[workflow_col] = "workflow"
+    else:
+        info_columns_map["wf_col_placeholder"] = "workflow"
+
     if use_job_outcome_provided:
         if vendor_tag_col in df.columns:
             info_columns_map[vendor_tag_col] = "vendor_tag"
         else:
             stats["transformation_error"] = "vendor_tag_column_missing"
+
     if use_job_score_provided:
         if vendor_score_col in df.columns:
             info_columns_map[vendor_score_col] = "vendor_score"
         else:
             stats["transformation_error"] = "vendor_score_column_missing"
+            
     if incorrect_if_commented:
         if vendor_comment_col in df.columns:
             info_columns_map[vendor_comment_col] = "vendor_comment"
         else:
             stats["transformation_error"] = "vendor_comment_column_missing"
-    
+
     info_valid_map = {src: dst for src, dst in info_columns_map.items() if src in df.columns}
     df.rename(columns=info_valid_map, inplace=True)
-
+    
 
     # Map Rubric Columns
     rubric_list_items = mod_config.get("rubric", [])
@@ -262,7 +270,6 @@ def transform(df, module_info):
         "rubric": [
             {
                 "rubric_name": rubric['rubric_name'],
-                "rubric_column": f"rb_{rubric['rubric_name']}",
                 "penalty_score": rubric['penalty_score']
             }
             for rubric in rubric_list if rubric["rubric_name"] in stats.get("rubric_list", [])

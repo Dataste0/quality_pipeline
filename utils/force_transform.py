@@ -36,9 +36,8 @@ HALORUBRIC_RAWFILE_PATH = os.path.join(
 METADATA_AUDIT = {
     "project_id" : "dummy1",
     "project_name" : "Dummy test",
-    #"module" : "HALO-RUBRIC",
-    "model_base": "audit", #/rubric/multi
-    "mod_config" : {
+    "module" : "CVS",
+    "model_config" : {
         
         "info_columns": {
             "rater_id_column": "rater-id",

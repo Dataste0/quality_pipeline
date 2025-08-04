@@ -51,8 +51,6 @@ def base_audit_etl(df, stats, base_config):
         "labels": [
             {
                 "label_name": "able_to_eval",
-                "rater_label_column": "r_able_to_eval", 
-                "auditor_label_column": "a_able_to_eval",
                 "auditor_column_type": "answer", #"answer/disagreement/agreement",
                 "is_label_binary": true,
                 "label_binary_pos_value": "EB_yes",
@@ -60,11 +58,9 @@ def base_audit_etl(df, stats, base_config):
             },
             {
                 "label_name": "withhold",
-                "rater_label_column": "r_withhold", 
-                "auditor_label_column": "a_withhold",
                 "auditor_column_type": "answer",
                 "is_label_binary": false,
-                "weight": null
+                "weight": 1
             }
         ]
     }
@@ -74,10 +70,13 @@ def base_audit_etl(df, stats, base_config):
         label_dicts = base_config.get("labels", [])
 
         # Map label columns
-        label_column_map = {}
-        for v in label_dicts:
-            label_column_map[v['rater_label_column']]       = f"{v['label_name']}|rater"
-            label_column_map[v['auditor_label_column']]     = f"{v['label_name']}|auditor"
+        label_column_map = {
+            f"rater_{v['label_name']}": f"{v['label_name']}|rater"
+            for v in label_dicts
+        } | {
+            f"auditor_{v['label_name']}": f"{v['label_name']}|auditor"
+            for v in label_dicts
+        }
         df = df.rename(columns=label_column_map)
         
         # Needed columns
@@ -118,14 +117,13 @@ def base_audit_etl(df, stats, base_config):
             rater_df,
             auditor_df,
             on=key_cols,
-            how="left"  # o "left" se sai che rater c'è sempre
+            how="left" 
         )
     
         df = df_wide
 
 
         # Map binary
-
         binary_map = {
             d["label_name"]: bool(d.get("is_label_binary", False))
             for d in label_dicts
@@ -226,28 +224,6 @@ def base_audit_etl(df, stats, base_config):
         
         return df
 
-        """
-        # Calculate final job score
-        df["weighted_correct"] = df["weight"] * df["is_correct"].astype("boolean").fillna(False).astype(int)
-        group_cols = ["job_id", "rater_id", "auditor_id"]
-
-        num = (
-            df
-            .groupby(group_cols)["weighted_correct"]
-            .transform("sum")
-        )
-
-        den = (
-            df
-            .groupby(group_cols)["is_correct"]
-            .transform(lambda x: x.notna().sum())
-        )
-
-        df["final_job_score"] = num / den
-        df.drop(columns="weighted_correct", inplace=True)
-
-        df.to_csv('test_audit_finale.csv')
-        """
         
 
     except Exception as e:
@@ -276,7 +252,6 @@ def base_transform(df, base_config):
 
     stats["rows_after_transformation"] = len(df)
 
-    # Add project_id...
-    #df = transformer_utils.enrich_dataframe_with_metadata(df, metadata)
+    df.to_csv("base_audit_debug_output.csv", index=False)
 
     return df, stats

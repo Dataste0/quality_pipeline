@@ -1,7 +1,11 @@
 import pandas as pd
 import re
+
+
+# --- Logger
 import logging
-#from pipeline_lib.project_transformers.schema import universal_quality_columns, halo_rubric_columns
+logger = logging.getLogger(__name__)
+
 
 
 #####################

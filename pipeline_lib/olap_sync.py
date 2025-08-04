@@ -1,7 +1,5 @@
-import logging
 import os
 import pandas as pd
-import ast
 
 import pipeline_lib.config as cfg
 import pipeline_lib.pipeline_utils as pu
@@ -10,32 +8,32 @@ from pipeline_lib.sql.queryrun import olap_query_run
 
 OLAP_BASE_FOLDER = cfg.OLAP_EXPORT_DIR_PATH
 
-TRANSFORMATION_QUEUE_FILE = cfg.QUEUE_TRANSFORMATION_FILE_PATH
-
-PROJECT_MASTERFILE = cfg.PROJECT_INFO_FILE_PATH
-
 # --- Setup queues
+TRANSFORMATION_QUEUE_FILE = cfg.QUEUE_TRANSFORMATION_FILE_PATH
 transformation_queue = TransformationQueueManager(TRANSFORMATION_QUEUE_FILE)
 
-# --- Setup logger
-logger = logging.getLogger('pipeline.olap')
+# --- Logger
+import logging
+logger = logging.getLogger(__name__)
 
 # --- Setup Project List
+PROJECT_MASTERFILE = cfg.PROJECT_INFO_FILE_PATH
 project_list_df = pu.load_project_info(PROJECT_MASTERFILE, active_only=False)
+
 
 
 #### Generate csv reports
 
 def generate_olap_reports(project_id, project_base, reporting_week, target):
     reporting_week_str = pd.to_datetime(reporting_week, errors="coerce").strftime("%Y-%m-%d")
-    olap_folder = os.path.join(OLAP_BASE_FOLDER, "O_" + project_id, reporting_week_str)
+    olap_folder = os.path.join(OLAP_BASE_FOLDER, project_id, reporting_week_str)
     os.makedirs(olap_folder, exist_ok=True)
     
     for query_name in ["smr-workflow", "smr-rater-label", "smr-job-label", "smr-error-contribution", "dmp-job-incorrect"]:
         report_name = project_id + "_" + reporting_week_str + "_" + project_base + "_" + query_name + ".csv"
         
         report_df = olap_query_run(query_name, project_base, project_id, reporting_week, target)
-        
+
         report_path = os.path.join(olap_folder, report_name)
         pu.save_df_to_filepath(report_df, report_path)
 

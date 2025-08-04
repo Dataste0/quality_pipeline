@@ -9,6 +9,11 @@ import traceback
 
 DATA_PARQUET_BASE_PATH = cfg.DATA_PARQUET_DIR_PATH
 
+# --- Logger
+import logging
+logger = logging.getLogger(__name__)
+
+
 
 class SafeDict(dict):
     def __missing__(self, key):
