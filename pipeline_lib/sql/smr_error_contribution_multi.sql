@@ -113,26 +113,26 @@ multi_rater_label_response_ct AS (
 
 -- REPORT
 label_error_count AS (
-    SELECT week_ending, project_id, parent_label, rater_response, COUNT(*) AS error_count
+    SELECT week_ending, project_id, parent_label, rater_response, consensus_response as ground_truth, COUNT(*) AS error_count
     FROM multi_rater_label_response_ct
     WHERE is_label_determined = 1 AND is_label_correct = 0
-    GROUP BY week_ending, project_id, parent_label, rater_response
+    GROUP BY week_ending, project_id, parent_label, rater_response, consensus_response
 ),
 
 label_error_contribution AS (
     SELECT 
         *, 
-        SUM(error_count) OVER (PARTITION BY week_ending, project_id, parent_label)::INT AS label_error_count,
-        error_count / SUM(error_count) OVER (PARTITION BY week_ending, project_id, parent_label)::FLOAT AS error_contribution
+        SUM(error_count) OVER (PARTITION BY week_ending, project_id, parent_label)::INT AS weekly_label_error_count,
+        error_count / SUM(error_count) OVER (PARTITION BY week_ending, project_id, parent_label)::FLOAT AS weekly_error_contribution
     FROM label_error_count
 ),
 
 label_cumulative_error_contribution AS (
     SELECT 
         *,
-        SUM(error_contribution) OVER (
+        SUM(weekly_error_contribution) OVER (
           PARTITION BY week_ending, project_id, parent_label
-          ORDER BY error_contribution DESC
+          ORDER BY weekly_error_contribution DESC
           ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         ) AS cumulative_error_contribution
     FROM label_error_contribution

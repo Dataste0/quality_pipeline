@@ -21,7 +21,7 @@ WITH alldata AS (
 
 -- REPORT
 label_error_count AS (
-    SELECT week_ending, project_id, rubric, COUNT(*) AS error_count
+    SELECT week_ending, project_id, rubric, 'Incorrect Annotation' as rater_response, 'None' as ground_truth, COUNT(*) AS error_count
     FROM alldata
     WHERE NOT job_correct
     GROUP BY week_ending, project_id, rubric
@@ -30,18 +30,17 @@ label_error_count AS (
 label_error_contribution AS (
     SELECT 
         *, 
-        'Incorrect Annotation' as rater_response,
-        SUM(error_count) OVER (PARTITION BY week_ending, project_id, rubric)::INT AS label_error_count,
-        error_count / SUM(error_count) OVER (PARTITION BY week_ending, project_id, rubric)::FLOAT AS error_contribution
+        SUM(error_count) OVER (PARTITION BY week_ending, project_id, rubric)::INT AS weekly_label_error_count,
+        error_count / SUM(error_count) OVER (PARTITION BY week_ending, project_id, rubric)::FLOAT AS weekly_error_contribution
     FROM label_error_count
 ),
 
 label_cumulative_error_contribution AS (
     SELECT 
         *,
-        SUM(error_contribution) OVER (
+        SUM(weekly_error_contribution) OVER (
           PARTITION BY week_ending, project_id, rubric
-          ORDER BY error_contribution DESC
+          ORDER BY weekly_error_contribution DESC
           ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         ) AS cumulative_error_contribution
     FROM label_error_contribution

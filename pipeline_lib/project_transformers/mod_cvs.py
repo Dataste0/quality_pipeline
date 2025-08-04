@@ -138,6 +138,8 @@ def CVS_transform(df, stats, mod_config):
     excluded_list = mod_config.get("excluded_labels", [])
     binary_labels = mod_config.get("binary_labels", [])
     stats["quality_methodology"] = quality_methodology
+    stats["excluded_list"] = excluded_list
+    stats["binary_labels"] = binary_labels
         
     # Strip initial spaces from column names
     df.columns = df.columns.str.strip()

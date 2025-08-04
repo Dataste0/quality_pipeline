@@ -124,4 +124,4 @@ SELECT
     CASE WHEN is_label_correct = 1 THEN TRUE ELSE FALSE END as is_correct
 FROM multi_rater_label_response_ct
 WHERE is_label_determined = 1 AND is_label_correct = 0
-LIMIT 1000
+LIMIT 500

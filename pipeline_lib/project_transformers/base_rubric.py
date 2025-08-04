@@ -47,8 +47,8 @@ def base_rubric_etl(df, stats, base_config):
 
         # Needed columns
         base_cols_list = ['workflow', 'job_date', 'rater_id', 'auditor_id', 'job_id', 'job_correct', 'job_score']
-        rubric_list = [d.get("rubric_name") for d in rubric_items]
-        rubric_cols_list = [f"rb_{d.get("rubric_name")}" for d in rubric_items]
+        rubric_list = [d.get('rubric_name') for d in rubric_items]
+        rubric_cols_list = [f"rb_{d.get('rubric_name')}" for d in rubric_items]
        
 
         required_cols = base_cols_list + rubric_cols_list

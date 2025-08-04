@@ -31,4 +31,4 @@ SELECT
     is_correct
 FROM alldata
 WHERE NOT is_correct OR is_correct = 0
-LIMIT 1000
+LIMIT 500

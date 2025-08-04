@@ -33,4 +33,4 @@ SELECT
     job_correct as is_correct
 FROM alldata
 WHERE NOT job_correct OR job_correct = 0
-LIMIT 1000
+LIMIT 500

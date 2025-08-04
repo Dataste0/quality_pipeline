@@ -58,6 +58,7 @@ def process_file(raw_file_path, project_id, metadata, data_week):
                 module_found = True
                 #print(f"\nTRANSFORM RAWDATA - DEBUG module info: {module_info}")
                 module_info['project_id'] = metadata['project_id'] # Add project id to module info for dispatching ADHOC modules
+                module_info['reporting_week'] = pd.to_datetime(data_week, errors="coerce").strftime("%Y-%m-%d") # Add reporting week for dataset with no job date
                 df_transformed, transformed_dict = process_dataframe(df, module_info)
                 process_file_dict["transform_info"] = {"project_id": metadata["project_id"], "project_name": metadata["project_name"]} | transformed_dict
 

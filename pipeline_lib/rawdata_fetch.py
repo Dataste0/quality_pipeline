@@ -53,9 +53,10 @@ def scan_rawdata_week_folder(
     
     # Fast Hash of directory
     directory_hash = pu.hash_directory_fast(folder_path, project_is_active) # want to ensure hash changes if project switches inactive -> active
-    #print(f"Directory Fast hash ready: {directory_hash} - Previous hash: {last_snapshot['folder_hash']}")
+    #print(f"Last snapshot cols: {len(last_snapshot)}, {last_snapshot.get('folder_hash')}, empty? {last_snapshot.empty}")
+    #print(f"Directory Fast hash ready: {directory_hash} - Previous hash: {last_snapshot.get('folder_hash')}")
 
-    if not last_snapshot.empty and last_snapshot["folder_hash"] == directory_hash:
+    if not last_snapshot.empty and last_snapshot.get("folder_hash") == directory_hash:
         #print("Weelky folder hash match. No changes made.")
         logger.debug(f"Weekly Folder matches previous status. No changes made. {project_id} ({project_name}) {folder_name}")
         return {
@@ -71,7 +72,7 @@ def scan_rawdata_week_folder(
             "valid_files_list": last_snapshot['valid_files_list']
         }
     
-    #print(f"Weekly Folder doesnt match previous hash. Checking folder content... {project_id} ({project_name}) {folder_name}")
+    print(f"Weekly Folder doesnt match previous hash. Checking folder content... {project_id} ({project_name}) {folder_name}")
     logger.info(f"Weekly Folder doesnt match previous hash. Checking folder content... {project_id} ({project_name}) {folder_name}")
     try:
         # Consider only non-empty CSV/Excel files with at least one data row
@@ -217,13 +218,15 @@ def scan_rawdata_project_folder(
     date_list = pu.generate_we_dates(project_start_date, project_end_date)
     logger.debug(f"Generated weekly dates: {date_list}")
 
+    last_snapshot['data_week'] = pd.to_datetime(last_snapshot['data_week'])
     for we_date in date_list:
-        we_date = we_date.strftime("%Y-%m-%d")
+        we_date = pd.to_datetime(we_date)
         
         filtered_snapshot = last_snapshot[
             (last_snapshot['data_week'] == we_date) &
             (last_snapshot['project_id'] == project_id)
         ]
+        #print(f"\nDEBUG {project_id} - {we_date} - {len(filtered_snapshot)}\n")
         if not filtered_snapshot.empty:
             snapshot_row = filtered_snapshot.iloc[0].copy()
         else:
@@ -234,7 +237,7 @@ def scan_rawdata_project_folder(
             project_name=project_name,
             project_is_active=project_is_active,
             project_config_list=project_config_list,
-            data_week=we_date,
+            data_week=we_date.strftime("%Y-%m-%d"),
             raw_data_root=raw_data_root,
             last_snapshot=snapshot_row,
             create_missing=create_missing

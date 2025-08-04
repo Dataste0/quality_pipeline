@@ -290,10 +290,27 @@ def UQD_transform(df, stats, mod_config):
         auditor_labels_pivoted = expand_label_columns(df, "auditor_labels", "auditor", excluded_list)
     else:
         auditor_labels_pivoted = pd.DataFrame(index=df.index)  # placeholder vuoto
+    
+
+    # Label match check
+    if needs_auditor:
+        # If a key is present in rater_ only, create the corresponding auditor_ column (empty)
+        for r_col in rater_labels_pivoted.columns:
+            a_col = r_col.replace("rater_", "auditor_", 1)
+            if a_col not in auditor_labels_pivoted.columns:
+                auditor_labels_pivoted[a_col] = ""
+    
+        # If a key is present in auditor_ only, remove it
+        for a_col in auditor_labels_pivoted.columns:
+            r_col = a_col.replace("auditor_", "rater_", 1)
+            if r_col not in rater_labels_pivoted.columns:
+                auditor_labels_pivoted.drop(columns=[a_col], inplace=True)
+
 
     # Concatenate
     result = pd.concat([df, rater_labels_pivoted, auditor_labels_pivoted], axis=1)
     result = result.drop(columns=["rater_labels", "auditor_labels"], errors="ignore")
+   
 
     # Extract labels found and create a list (all_labels)
     def extract_labels(expanded_df, prefix):
@@ -330,9 +347,7 @@ def UQD_transform(df, stats, mod_config):
 
     # Compile stats
     stats["rows_final"] = len(result)
-
-    print(f"DEBUG RESULT UQD MODULE: {result.columns}")
-    
+  
     return result
 
 

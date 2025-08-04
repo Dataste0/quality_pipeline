@@ -8,8 +8,8 @@ import pipeline_lib.config as cfg
 
 FILEPATH = os.path.join(
     cfg.RAWDATA_ROOT_PATH, 
-    "a01TR00000Eb8K1YAJ_ML Text Generation MAdLlama", "WE 2025.07.25", 
-    "MAdLlama (Adur) Raw data_PT WE07.25.csv")
+    "a01TR00000MGcpSYAT_MGenAI Video Expansion", "WE 2025.06.20", 
+    "REGULAR QUEUE 620.csv")
 
 def main():
     

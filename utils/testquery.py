@@ -16,8 +16,8 @@ import pipeline_lib.config as cfg
 DATA_PARQUET_BASE_PATH = cfg.DATA_PARQUET_DIR_PATH
 BASE_DIR = "/home/steco/quality_pipeline/pipeline_lib/sql"
 #QUERY_NAME = "smr-workflow"
-#QUERY_NAME = "smr-error-contribution"
-QUERY_NAME = "dmp-job-incorrect"
+QUERY_NAME = "smr-error-contribution"
+#QUERY_NAME = "dmp-job-incorrect"
 TARGET = 0.9
 
 #rubric project
@@ -41,7 +41,7 @@ class SafeDict(dict):
         return f"{{{key}}}"
     
 def olap_rep_generate(query_name, base, project_id, reporting_week, target):
-    base_dir = Path(BASE_DIR)
+    base_dir = 'C:\\Users\\steco\\myprojects\\quality_pipeline\\pipeline_lib\\sql'
     print(f"BASE DIR: {base_dir}")
 
     if isinstance(base, str) and len(base)>0:
@@ -63,8 +63,11 @@ def olap_rep_generate(query_name, base, project_id, reporting_week, target):
         return None
     
     
-    query_file = base_dir / query_map[query_name]
-    with query_file.open("r") as f:
+    query_file = f"{base_dir}\{query_map[query_name]}"
+    print(f"QUERY FILE: {query_file}")
+    #with query_file.open("r") as f:
+    #    query_sql = f.read()
+    with open(query_file, "r") as f:
         query_sql = f.read()
 
     # Build path
