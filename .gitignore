@@ -5,6 +5,7 @@ folderpath.env.local
 .venv/
 .vscode/
 .VSCodeCounter/
+.conda/
 
 **/__pycache__/
 *.py[cod]
