@@ -6,10 +6,10 @@
 
 from pipeline_lib.project_transformers.mod_uqd import transform as uqd_transform
 import re
-import logging
 
-# --- Setup logger
-logger = logging.getLogger('pipeline.transform_modules')
+# --- Logger
+import logging
+logger = logging.getLogger(__name__)
 
 
 

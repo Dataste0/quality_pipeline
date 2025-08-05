@@ -21,7 +21,7 @@ def load_project_info(filepath, sheet_name="Project List", active_only=False):
 
     underscore_columns = [col for col in df.columns if col.startswith("_")]
     df_selected = df[underscore_columns].copy()
-    df_selected.columns = [col[1:] for col in df_selected.columns]
+    df_selected.columns = [col[1:] for col in df_selected.columns] # Removes prefix _
     df = df_selected.copy()
     
     df = df[df["project_status"] != "Hidden"]  # Remove hidden projects

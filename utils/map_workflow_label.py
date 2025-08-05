@@ -35,7 +35,7 @@ def append_to_excel(filepath, new_rows_df):
 
 
 def generate_map_info_markets():
-    report_df = query_map_info_run("map-info-markets")
+    report_df = query_map_info_run("market")
     merged_df = report_df.merge(project_list_df[['project_id', 'project_name']], on='project_id', how='left')
 
     current_market_info_df = pu.load_df_from_filepath(MARKET_MAP_FILE_PATH)
@@ -73,16 +73,18 @@ def generate_map_info_markets():
 
     new_entries_df = new_entries_df[current_market_info_df.columns]
 
-    #print(new_entries_df)
+    print(f"Markets - New Entries {len(new_entries_df)}:")
+    print("-----------------------")
+    print(new_entries_df)
 
     # Add to excel file: MARKET_MAP_FILE_PATH
     append_to_excel(MARKET_MAP_FILE_PATH, new_entries_df)
 
-    print(f"Map Markets: added {len(new_entries_df)} new rows.")
+    #print(f"Map Markets: added {len(new_entries_df)} new rows.")
 
 
 def generate_map_info_labels():
-    report_df = query_map_info_run("map-info-labels")
+    report_df = query_map_info_run("label")
     merged_df = report_df.merge(project_list_df[['project_id', 'project_name']], on='project_id', how='left')
 
     current_label_info_df = pu.load_df_from_filepath(LABEL_MAP_FILE_PATH)
@@ -92,18 +94,18 @@ def generate_map_info_labels():
         current_df = current_label_info_df.rename(columns={
             "Project Name": "project_name",
             "Mercury ID": "project_id",
-            "Original Label": "parent_label"
+            "Original Label": "label"
         })
         rename_back = {
             "project_name": "Project Name",
             "project_id": "Mercury ID",
-            "parent_label": "Original Label"
+            "label": "Original Label"
         }
     else:
         current_df = current_label_info_df.copy()
         rename_back = {}
     
-    joined_cols = ['project_id', 'parent_label']
+    joined_cols = ['project_id', 'label']
     new_entries_df = merged_df.merge(
         current_df[joined_cols].drop_duplicates(),
         on=joined_cols,
@@ -120,11 +122,11 @@ def generate_map_info_labels():
 
     new_entries_df = new_entries_df[current_label_info_df.columns]
 
-    #print(new_entries_df)
+    print(f"Labels - New Entries {len(new_entries_df)}:")
+    print("-----------------------")
+    print(new_entries_df)
 
     append_to_excel(LABEL_MAP_FILE_PATH, new_entries_df)
-
-    print(f"Map Labels: added {len(new_entries_df)} new rows.")
 
 generate_map_info_markets()
 generate_map_info_labels()

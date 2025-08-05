@@ -54,7 +54,7 @@ def _as_boolish(series: pd.Series) -> pd.Series:
 
 def generic_audit_transform(df, stats, mod_config):
     """
-    MOD-CONFIG DICTIONARY FORMAT
+    MOD-CONFIG DICTIONARY FORMAT (for Audit projects)
 
         "module_config": {
                "info_columns": {
@@ -64,6 +64,59 @@ def generic_audit_transform(df, stats, mod_config):
                     "submission_date_column": "Annotation Date And Time"
                 },
                 "quality_methodology": "audit",
+                "labels": [
+                    {
+                        "label_name": "url_classification",
+                        "rater_label_column": "Annotation URL Classification",
+                        "auditor_label_column": "Audit URL Classification",
+                        "auditor_column_type": "answer",
+                        "is_label_binary": true,
+                        "label_binary_pos_value": "yes",
+                        "weight": "",
+                    },
+                    {
+                        "label_name": "url_classification_correct",
+                        "rater_answer_not_recorded": True,
+                        "rater_answer_placeholder": "placeholder_response",
+                        "auditor_label_column": "KPI: Is URL classified correctly?",
+                        "auditor_column_type": "agreement",
+                    },
+                    {
+                        "label_name": "title_annotation_correct",
+                        "rater_answer_not_recorded": True,
+                        "rater_answer_placeholder": "placeholder_response",
+                        "auditor_label_column": "KPI: Is Title annotated correctly?",
+                        "auditor_column_type": "agreement",
+                    },
+                    {
+                        "label_name": "main_description_correct",
+                        "rater_answer_not_recorded": True,
+                        "rater_answer_placeholder": "placeholder_response",
+                        "auditor_label_column": "KPI: Is main-description annotated correctly?",
+                        "auditor_column_type": "agreement",
+                    },
+                    {
+                        "label_name": "additional_description_correct",
+                        "rater_answer_not_recorded": True,
+                        "rater_answer_placeholder": "placeholder_response",
+                        "auditor_label_column": "KPI: Is additional-description annotated correctly?",
+                        "auditor_column_type": "agreement",
+                    }
+                ]
+            }
+    """
+
+    """
+    MOD-CONFIG DICTIONARY FORMAT (for Multi-unpivoted projects)
+
+        "module_config": {
+               "info_columns": {
+                    "rater_id_column": "actor_id",
+                    "job_id_column": "entity_id",
+                    "submission_date_column": "job_date"
+                },
+                "quality_methodology": "multi",
+                "data_structure": "unpivoted",
                 "labels": [
                     {
                         "label_name": "url_classification",

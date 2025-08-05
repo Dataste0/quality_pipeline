@@ -3,12 +3,11 @@
 ###################
 
 import pandas as pd
-import numpy as np
 from pipeline_lib.project_transformers import transformer_utils
-import logging
 
-# --- Setup logger
-logger = logging.getLogger('pipeline.transform_modules')
+# --- Logger
+import logging
+logger = logging.getLogger(__name__)
 
 
 

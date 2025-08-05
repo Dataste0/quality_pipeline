@@ -175,7 +175,11 @@ def scan_rawdata_project_folder(
 
     #print(f"TEST PROJECT METADATA PRIMA DI JSON LOADS: {project_metadata}\n")
     #print(f"TYPE METADATA: {type(project_metadata)}\n")
-    metadata_dict = json.loads(project_metadata)
+    metadata_dict = {}
+    try:
+        metadata_dict = json.loads(project_metadata)
+    except:
+        print(f"METADATA JSON EMPTY or INVALID - Project {project_id} ({project_name})")
     #print(f"TEST MEDATADA DICT DOPO PARSING: {metadata_dict}\n")
     project_config_list = metadata_dict.get("project_config", [])
     scan_log = []

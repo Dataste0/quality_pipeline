@@ -226,8 +226,8 @@ def transform_enqueued_items():
         
         # Enqueue
         transformation_queue.complete_transform(enqueued_item_id, transform_result, {
-            "output_filenames": output_filenames,
-            "content_weeks": content_weeks,
+            "output_filenames": json.dumps(output_filenames),
+            "content_weeks": json.dumps(content_weeks),
             "transform_info": json.dumps(transform_info)
         })
 

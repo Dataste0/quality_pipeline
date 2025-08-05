@@ -187,7 +187,6 @@ def UQD_transform(df, stats, mod_config):
     }
     """
 
-     
     stats["rows_initial"] = len(df)
 
     quality_methodology = mod_config.get("quality_methodology", None)
@@ -243,16 +242,19 @@ def UQD_transform(df, stats, mod_config):
     # Remove from df
     df = df[~mask_invalid_id].copy()
 
+
     # Remove empty rows
     df = df[df["rater_parse_data"].notna() & (df["rater_parse_data"] != '')]
     if needs_auditor:
         df = df[df["auditor_parse_data"].notna() & (df["auditor_parse_data"] != '')]
 
+
     # Replace semicolon with comma
     df["rater_parse_data"] = df["rater_parse_data"].fillna("").apply(lambda x: x.replace(";", ","))
     if needs_auditor:
         df["auditor_parse_data"] = df["auditor_parse_data"].fillna("").apply(lambda x: x.replace(";", ","))
-    
+
+
     # Parse JSON
     logging.debug("Extracting labels UQD_audit")
     df['rater_labels'] = [UQD_extract_labels(x, use_extracted) for x in df["rater_parse_data"]]
@@ -273,6 +275,7 @@ def UQD_transform(df, stats, mod_config):
     stats["skipped_invalid_json"] = int(combined_mask.sum())
     # Remove invalid json rows
     df = df[~combined_mask].copy()
+
     
     # Keep only relevant columns
     cols = ["job_date", "workflow", "job_id", "rater_id", "rater_labels"]
@@ -282,6 +285,14 @@ def UQD_transform(df, stats, mod_config):
 
     # Drop duplicates
     df.drop_duplicates(subset=["rater_id", "job_id"], keep="last", inplace=True)
+
+
+    # At this point, check if the dataframe is empty (after removing invalid rows)
+    if df.empty:
+        logging.warning("DataFrame is empty after filtering. No valid data to process.")
+        stats["transform_error"] = "df_empty_after_filtering"
+        return pd.DataFrame()
+
     
     # Expand key values
     rater_labels_pivoted = expand_label_columns(df, "rater_labels", "rater", excluded_list)
@@ -290,6 +301,7 @@ def UQD_transform(df, stats, mod_config):
         auditor_labels_pivoted = expand_label_columns(df, "auditor_labels", "auditor", excluded_list)
     else:
         auditor_labels_pivoted = pd.DataFrame(index=df.index)  # placeholder vuoto
+
     
 
     # Label match check
@@ -319,6 +331,7 @@ def UQD_transform(df, stats, mod_config):
             if col.startswith(f"{prefix}_"):
                 keys.append(col[len(prefix)+1 :])  # rimuove "r_" o "a_"
         return set(keys)
+
 
     rater_keys = extract_labels(rater_labels_pivoted, "rater")
     auditor_keys = extract_labels(auditor_labels_pivoted, "auditor") if needs_auditor else set()
@@ -355,7 +368,7 @@ def transform(df, module_info):
     stats = {}
     stats["etl_module"] = "UQD"
 
-    #print("METADATA: {mod_config}")
+    #print(f"MODULE INFO: {module_info}")
 
     # Module config
     mod_config = module_info.get("module_config")
@@ -399,6 +412,9 @@ def transform(df, module_info):
             for label in stats.get("label_list", [])
         ]
     }
+
+    if df.empty:
+        return pd.DataFrame(), stats
 
     base_config = module_info.get("base_config", {})
     if quality_methodology == 'multi':

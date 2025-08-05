@@ -28,14 +28,12 @@ def base_multi_etl(df, stats, base_config):
         "labels": [
             {
                 "label_name": "able_to_eval",
-                "rater_label_column": "r_able_to_eval", 
                 "is_label_binary": true,
                 "label_binary_pos_value": "EB_yes",
                 "weight": 1
             },
             {
                 "label_name": "withhold",
-                "rater_label_column": "r_withhold", 
                 "is_label_binary": false,
                 "weight": null
             }

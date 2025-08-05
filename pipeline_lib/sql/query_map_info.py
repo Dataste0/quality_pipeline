@@ -1,38 +1,83 @@
 import duckdb
 import os
-from datetime import datetime
 from pathlib import Path
 import pipeline_lib.config as cfg
+import pandas as pd
 
 DATA_PARQUET_BASE_PATH = cfg.DATA_PARQUET_DIR_PATH
 
-def query_map_info_run(query_name):
-    base_dir = Path(__file__).parent
+def query_map_info_run(item_to_collect="market"):
 
-    query_map = {
-        'map-info-markets': 'query_map_info_markets.sql',
-        'map-info-labels': 'query_map_info_labels.sql'
-    }
+    dfs = []
+    for base_code in ['A', 'M', 'R']:
+        # costruisci il pattern del file parquet
+        pattern = f"*/*/*_{base_code}_*.parquet"
+        input_path = os.path.join(DATA_PARQUET_BASE_PATH, pattern)
+            
+        # definisci la query includendo il base_code per tracciare da quale schema viene
+        sql_market = f"""
+            SELECT
+                project_id,
+                workflow
+            FROM '{input_path}'
+            GROUP BY project_id, workflow
+            """
 
-    if query_name not in query_map:
-        print(f"[ERROR] Query '{query_name}' doesn't exist")
+        sql_label = f"""
+            SELECT
+                project_id,
+                parent_label
+            FROM '{input_path}'
+            GROUP BY project_id, parent_label
+            """
+            
+        sql_rubric = f"""
+            SELECT
+                project_id,
+                rubric
+            FROM '{input_path}'
+            GROUP BY project_id, rubric
+            """
 
-    query_file = base_dir / query_map[query_name]
-    with query_file.open("r") as f:
-        query_sql = f.read()
-
-    # Build path
-    input_path = os.path.join(DATA_PARQUET_BASE_PATH, f"Parq_*/*/*C*.parquet")
-
-    # Join CTE and Query
-    full_sql = query_sql
-
-    rendered_sql = full_sql.format(
-        input_path=f"'{input_path}'",
-    )
-
-    #print(f"Rendered SQL: {rendered_sql}")
+        # esegui e raccogli
+        if item_to_collect == "market":
+            query = sql_market
+            df = duckdb.query(query).to_df()
+            required_columns = ['project_id', 'workflow']
+            df = df[required_columns]
+            dfs.append(df)
+        
+        elif item_to_collect == "label":
+            #print(f"Collecting labels for base code: {base_code}")
+            if base_code == 'R':
+                #print("Collecting rubric labels")
+                query = sql_rubric
+                df = duckdb.query(query).to_df()
+                required_columns = ['project_id', 'rubric']
+                df = df[required_columns]
+                df.rename(columns={'rubric': 'label'}, inplace=True)
+                dfs.append(df)
+            
+            else:
+                query = sql_label
+                df = duckdb.query(query).to_df()
+                required_columns = ['project_id', 'parent_label']
+                df = df[required_columns]
+                df.rename(columns={'parent_label': 'label'}, inplace=True)
+                dfs.append(df)
+        
+        else:
+            raise ValueError(f"Unknown collect type: {item_to_collect}")
     
-    # Execute query
-    return duckdb.query(rendered_sql).to_df()
+    # unisci tutti i risultati
+    if dfs:
+        df = pd.concat(dfs, ignore_index=True)
+    else:
+        if item_to_collect == "market":
+            df = pd.DataFrame(columns=['project_id', 'workflow'])
+        elif item_to_collect == "label":
+            df = pd.DataFrame(columns=['project_id', 'label'])
+        else:
+            raise ValueError(f"Unknown collect type: {item_to_collect}")
 
+    return df
