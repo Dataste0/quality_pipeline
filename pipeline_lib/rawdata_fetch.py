@@ -105,6 +105,7 @@ def scan_rawdata_week_folder(
                 
                 if item_regex.match(f):
                     regex_matched = True
+                    #print("Regex match found for file:", f, "Pattern:", item_pattern, "Dataset fingerprint:", item.get("dataset_fingerprint"))
                     dataset_fingerprint = item.get("dataset_fingerprint")
                     header_computed = pu.hash_header(full_path)
                     format_ok = header_computed == dataset_fingerprint
@@ -113,7 +114,7 @@ def scan_rawdata_week_folder(
                     # trovato il primo match: esci dal loop degli item
                     break
             
-            logger.debug(f"File {f} - Regex match: {regex_matched} - Format OK: {format_ok}")
+            #print(f"File {f} - Regex match: {regex_matched} - Format OK: {format_ok}")
                          
             file_existing_list.append({
                 "filename": f,
