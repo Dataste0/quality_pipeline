@@ -8,8 +8,8 @@ import pipeline_lib.config as cfg
 
 FILEPATH = os.path.join(
     cfg.RAWDATA_ROOT_PATH, 
-    "a01Hs00001ocUZnIAM_Marketplace Contextual Ads", "WE 2025.06.27", 
-    "Murray_WE06.27.2025_UQD HALO.csv")
+    "01TR00000KeKFrYAN_MVP-Generative composition", "WE 2025.05.16", 
+    "WE 05.16.csv")
 
 def main():
     
