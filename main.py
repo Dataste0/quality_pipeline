@@ -27,7 +27,7 @@ def main():
         generate_rawdata_snapshot()
         compare_rawdata_snapshots()
         transform_enqueued_items()
-        #olap_sync()
+        olap_sync()
     elif args.snapshot:
         generate_rawdata_snapshot()
     elif args.enqueue:
