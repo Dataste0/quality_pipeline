@@ -51,14 +51,12 @@ def base_audit_etl(df, stats, base_config):
         "labels": [
             {
                 "label_name": "able_to_eval",
-                "auditor_column_type": "answer", #"answer/disagreement/agreement",
                 "is_label_binary": true,
                 "label_binary_pos_value": "EB_yes",
                 "weight": 1
             },
             {
                 "label_name": "withhold",
-                "auditor_column_type": "answer",
                 "is_label_binary": false,
                 "weight": 1
             }
