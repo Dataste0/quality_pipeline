@@ -96,6 +96,9 @@ def overwrite_olap(project, reporting_week):
                 # order by jobdate, newest first
                 df = df[df["job_date"] == ordered_job_dates[0]].copy()
 
+            # before filter out combined routing i want to create an overall column that contains the f1 score of overall routing in all rows
+            df['project_score'] = df['accuracy'].where(df['workflow'] == 'combined_routing')
+            df['project_f1score'] = df['f1_score'].where(df['workflow'] == 'combined_routing')
             # filter out "combined_routing" from workflow
             df = df[df["workflow"] != "combined_routing"].copy()
 

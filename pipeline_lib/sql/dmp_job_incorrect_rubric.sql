@@ -12,7 +12,6 @@ WITH alldata AS (
         WHERE rubric IS NOT NULL 
           AND rubric <> '' 
           AND rubric <> 'pipeline_error'
-          AND rubric_score = 1
           AND project_id = {project_id}
           AND reporting_week = {reporting_week}
     ) t
@@ -26,11 +25,12 @@ SELECT
     workflow,
     rater_id,
     job_id,
-    'Incorrect Annotation' as rubric,
-    '' as rater_response,
-    '' as ground_truth,
+    'Incorrect Annotation' as parent_label,
+    'n/a' as rater_response,
+    'n/a' as ground_truth,
     '' as confusion_type,
     job_correct as is_correct
 FROM alldata
-WHERE NOT job_correct OR job_correct = 0
+GROUP BY week_ending, project_id, workflow, rater_id, job_id, job_correct
+HAVING NOT job_correct
 LIMIT 500

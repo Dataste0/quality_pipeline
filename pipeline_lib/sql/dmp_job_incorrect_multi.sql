@@ -72,7 +72,7 @@ label_correct AS (
 )
 ,
 -- compare all responses with consensus responses
-multi_rater_label_response AS (
+compare_response AS (
     SELECT 
         M.week_ending,
         M.project_id, 
@@ -97,9 +97,21 @@ multi_rater_label_response AS (
     LEFT JOIN label_correct L USING (project_id, job_id, parent_label)
 )
 ,
-multi_rater_label_response_ct AS (
+-- compare all responses with consensus responses
+multireview_jobs_labels AS (
     SELECT 
-        *,
+        week_ending, 
+        project_id, 
+        workflow, 
+        rater_id, 
+        job_id, 
+        parent_label, 
+        rater_response, 
+        consensus_response AS ground_truth_consensus, 
+        is_label_determined AS has_ground_truth_consensus, 
+        is_label_correct,
+        is_binary,
+        is_positive,
         CASE
             WHEN is_binary AND is_positive AND is_label_correct THEN 'TP'
             WHEN is_binary AND NOT is_positive AND is_label_correct THEN 'TN'
@@ -107,7 +119,7 @@ multi_rater_label_response_ct AS (
             WHEN is_binary AND NOT is_positive AND NOT is_label_correct THEN 'FN'
             ELSE NULL
         END AS confusion_type
-    FROM multi_rater_label_response
+    FROM compare_response
 )
 
 
@@ -118,10 +130,10 @@ SELECT
     rater_id,
     job_id,
     parent_label,
-    rater_response,
-    consensus_response as ground_truth,
+    COALESCE(NULLIF(rater_response, ''), '<empty>') as rater_response, 
+    COALESCE(NULLIF(ground_truth_consensus, ''), '<empty>') as ground_truth,
     confusion_type,
     CASE WHEN is_label_correct = 1 THEN TRUE ELSE FALSE END as is_correct
-FROM multi_rater_label_response_ct
-WHERE is_label_determined = 1 AND is_label_correct = 0
+FROM multireview_jobs_labels
+WHERE has_ground_truth_consensus = 1 AND is_label_correct = 0
 LIMIT 500

@@ -21,31 +21,25 @@ WITH alldata AS (
 
 -- REPORT
 label_error_count AS (
-    SELECT week_ending, project_id, rubric, 'Incorrect Annotation' as rater_response, 'None' as ground_truth, COUNT(*) AS error_count
+    SELECT week_ending, project_id, rubric as parent_label, 'Incorrect Annotation' as rater_response, 'None' as ground_truth, COUNT(*) AS error_count
     FROM alldata
-    WHERE NOT job_correct
+    WHERE rubric_penalty > 0 AND factor > 0
     GROUP BY week_ending, project_id, rubric
 ),
 
 label_error_contribution AS (
     SELECT 
-        *, 
-        SUM(error_count) OVER (PARTITION BY week_ending, project_id, rubric)::INT AS weekly_label_error_count,
-        error_count / SUM(error_count) OVER (PARTITION BY week_ending, project_id, rubric)::FLOAT AS weekly_error_contribution
+        week_ending, 
+        project_id, 
+        parent_label, 
+        COALESCE(NULLIF(rater_response, ''), '<empty>') as rater_response, 
+        COALESCE(NULLIF(ground_truth, ''), '<empty>') as ground_truth, 
+        error_count,
+        SUM(error_count) OVER (PARTITION BY week_ending, project_id, parent_label)::INT AS weekly_label_error_count,
+        error_count / SUM(error_count) OVER (PARTITION BY week_ending, project_id, parent_label)::FLOAT AS weekly_error_contribution
     FROM label_error_count
-),
-
-label_cumulative_error_contribution AS (
-    SELECT 
-        *,
-        SUM(weekly_error_contribution) OVER (
-          PARTITION BY week_ending, project_id, rubric
-          ORDER BY weekly_error_contribution DESC
-          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        ) AS cumulative_error_contribution
-    FROM label_error_contribution
 )
 
 
-SELECT * FROM label_cumulative_error_contribution
-ORDER BY week_ending, project_id, rubric, cumulative_error_contribution ASC
+SELECT * 
+FROM label_error_contribution

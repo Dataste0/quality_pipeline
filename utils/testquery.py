@@ -15,15 +15,15 @@ import pipeline_lib.config as cfg
 
 DATA_PARQUET_BASE_PATH = cfg.DATA_PARQUET_DIR_PATH
 BASE_DIR = "/home/steco/quality_pipeline/pipeline_lib/sql"
-#QUERY_NAME = "smr-workflow"
-QUERY_NAME = "smr-error-contribution"
+QUERY_NAME = "smr-workflow"
+#QUERY_NAME = "smr-error-contribution"
 #QUERY_NAME = "dmp-job-incorrect"
 TARGET = 0.9
 
 #rubric project
-#BASE = "rubric"
-#PROJECT_ID = "a01Hs00001ocUaxIAE"
-#REPORTING_WEEK = "7/11/2025"
+BASE = "rubric"
+PROJECT_ID = "a01Hs00001ocUaxIAE"
+REPORTING_WEEK = "7/11/2025"
 
 #audit project CVS
 #BASE = "audit"
@@ -31,9 +31,9 @@ TARGET = 0.9
 #REPORTING_WEEK = "7/18/2025"
 
 #multi UQD
-BASE = "multi"
-PROJECT_ID = "a01Hs00001ocUiNIAU"
-REPORTING_WEEK = "4/18/2025"
+#BASE = "multi"
+#PROJECT_ID = "a01Hs00001ocUiNIAU"
+#REPORTING_WEEK = "4/18/2025"
 
 
 class SafeDict(dict):

@@ -28,23 +28,17 @@ label_error_count AS (
 
 label_error_contribution AS (
     SELECT 
-        *, 
+        week_ending, 
+        project_id, 
+        parent_label, 
+        COALESCE(NULLIF(rater_response, ''), '<empty>') as rater_response, 
+        COALESCE(NULLIF(ground_truth, ''), '<empty>') as ground_truth,
+        error_count,
         SUM(error_count) OVER (PARTITION BY week_ending, project_id, parent_label)::INT AS weekly_label_error_count,
         error_count / SUM(error_count) OVER (PARTITION BY week_ending, project_id, parent_label)::FLOAT AS weekly_error_contribution
     FROM label_error_count
-),
-
-label_cumulative_error_contribution AS (
-    SELECT 
-        *,
-        SUM(weekly_error_contribution) OVER (
-          PARTITION BY week_ending, project_id, parent_label
-          ORDER BY weekly_error_contribution DESC
-          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        ) AS cumulative_error_contribution
-    FROM label_error_contribution
 )
 
 
-SELECT * FROM label_cumulative_error_contribution
-ORDER BY week_ending, project_id, parent_label, cumulative_error_contribution ASC
+SELECT * 
+FROM label_error_contribution

@@ -150,36 +150,20 @@ def base_audit_etl(df, stats, base_config):
 
 
 
-        # Map Outcome
-        df["is_correct"] = pd.Series(pd.NA, index=df.index, dtype="boolean")
+        # Map Outcome (solo "answer")
+        # Normalizza stringhe vuote/whitespace a NA
+        r = df["rater_response"].astype("string").replace(r"^\s*$", pd.NA, regex=True)
+        a = df["auditor_response"].astype("string").replace(r"^\s*$", pd.NA, regex=True)
 
-        auditor_col_type = {
-            d["label_name"]: d.get("auditor_column_type", "answer")
-            for d in label_dicts
-            if "label_name" in d
-        }
+        # Confronto diretto: True se uguali, False altrimenti
+        is_correct = pd.Series(False, index=df.index, dtype="boolean")
+        is_correct[r.eq(a)] = True
 
-        col_type_series = df["parent_label"].map(auditor_col_type).fillna("answer")
-        r = df["rater_response"]
-        a = df["auditor_response"]
-        a_bool = _as_boolish(a)
-
-        # masks
-        mask_answer = col_type_series == "answer"
-        mask_agreement = col_type_series == "agreement"
-        mask_disagreement = col_type_series == "disagreement"
-
-        is_correct = pd.Series(pd.NA, index=df.index, dtype="boolean")
-
-        # answer: match if both not null
-        eq_or_both_null = r.eq(a) | (r.isna() & a.isna())
-        is_correct.loc[mask_answer] = eq_or_both_null.loc[mask_answer].astype("boolean")
-
-        # agreement: prende il valore booleano dell'auditor
-        is_correct.loc[mask_agreement] = a_bool.fillna(False)
-
-        # disagreement: inversione (NA resta NA)
-        is_correct.loc[mask_disagreement] = (~a_bool).astype("boolean")
+        # Not audited -> NA
+        mask_no_auditor = (
+            df["auditor_id"].astype("string").replace(r"^\s*$", pd.NA, regex=True).isna()
+        )
+        is_correct[mask_no_auditor] = pd.NA
 
         df["is_correct"] = is_correct
 

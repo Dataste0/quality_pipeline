@@ -184,9 +184,9 @@ def generic_audit_transform(df, stats, mod_config):
 
         if v.get('rater_answer_not_recorded'):
             placeholder_col = f"rater_{label_name}" # dummy column
-            placeholder_val = v.get('rater_answer_placeholder','placeholder_value')
+            placeholder_val = pd.NA         
             df[placeholder_col] = placeholder_val
-            #label_column_map[placeholder_col] = f"rater_{label_name}"
+            auditor_col = f"auditor_{label_name}"
         else:
             rater_label_col = v['rater_label_column']
             label_column_map[rater_label_col] = f"rater_{label_name}"
@@ -206,6 +206,11 @@ def generic_audit_transform(df, stats, mod_config):
 
     required_df_cols = info_columns + label_cols_renamed
     df = df.loc[:, [col for col in required_df_cols if col in df.columns]]
+
+    # Fix date format and remove rows with incorrect dates
+    df["job_date"] = df["job_date"].apply(transformer_utils.convert_tricky_date)
+    stats["skipped_invalid_datetime"] = int(df["job_date"].isnull().sum())
+    df = df[df["job_date"].notnull()].copy()
 
 
     # ["workflow", "job_date", "rater_id", "job_id"] [is_rateable|rater, is_rateable|auditor] [withhold|rater, withhold|auditor] ...

@@ -171,21 +171,30 @@ def scan_rawdata_project_folder(
 ):
 
     logger.debug(
-        f"Scanning project folder: {project_name} | create_missing={create_missing}, hash={hash}"
+        f"Scanning project folder: {project_name} | create_missing={create_missing}"
     )
 
-    #print(f"TEST PROJECT METADATA PRIMA DI JSON LOADS: {project_metadata}\n")
-    #print(f"TYPE METADATA: {type(project_metadata)}\n")
-    metadata_dict = {}
+    # ---- Parse metadata safely
     try:
-        metadata_dict = json.loads(project_metadata)
-    except:
-        print(f"METADATA JSON EMPTY or INVALID - Project {project_id} ({project_name})")
-    #print(f"TEST MEDATADA DICT DOPO PARSING: {metadata_dict}\n")
+        # Accept both dict and JSON string
+        if isinstance(project_metadata, dict):
+            metadata_dict = project_metadata
+        elif isinstance(project_metadata, str) and project_metadata.strip():
+            metadata_dict = json.loads(project_metadata)
+        else:
+            logger.warning(f"Empty metadata for project {project_id} ({project_name}). Using defaults.")
+            metadata_dict = {}
+    except Exception as e:
+        # Keep running even if metadata is invalid.
+        logger.warning(
+            f"Invalid metadata JSON for project {project_id} ({project_name}): {e}. Using defaults."
+        )
+        metadata_dict = {}
+    
     project_config_list = metadata_dict.get("project_config", [])
     scan_log = []
     
-
+    # ---- Pre-compile filters per project_config item
     for item in project_config_list:
         file_pattern_dict = item.get("files_filter", {})
         file_pattern_flat = pu.extract_file_pattern(file_pattern_dict)
@@ -198,13 +207,16 @@ def scan_rawdata_project_folder(
         try:
             regex = re.compile(file_pattern_flat)
         except re.error:
+            # Preserve original behavior: abort on invalid regex.
             logger.warning(f"Invalid regex for {project_id} ({project_name})")
             return None
         
+        # Store compiled regex and the original pattern for downstream use.
         item['files_filter_regex'] = regex
         item['files_filter_pattern'] = file_pattern_flat
-        
 
+
+    # ---- Ensure project folder exists
     project_folder_info = pu.get_project_folder(project_id, raw_data_root)
 
     if not project_folder_info["exists"]:
@@ -219,11 +231,13 @@ def scan_rawdata_project_folder(
     else:
         project_folder_path = project_folder_info["path"]
 
+    # ---- Build weekly date range and normalize snapshots
     # Generate list of weekly end dates between start and end
     date_list = pu.generate_we_dates(project_start_date, project_end_date)
     logger.debug(f"Generated weekly dates: {date_list}")
-
     last_snapshot['data_week'] = pd.to_datetime(last_snapshot['data_week'])
+
+    # ---- Iterate weeks and scan week folders
     for we_date in date_list:
         we_date = pd.to_datetime(we_date)
         
@@ -231,7 +245,7 @@ def scan_rawdata_project_folder(
             (last_snapshot['data_week'] == we_date) &
             (last_snapshot['project_id'] == project_id)
         ]
-        #print(f"\nDEBUG {project_id} - {we_date} - {len(filtered_snapshot)}\n")
+        
         if not filtered_snapshot.empty:
             snapshot_row = filtered_snapshot.iloc[0].copy()
         else:

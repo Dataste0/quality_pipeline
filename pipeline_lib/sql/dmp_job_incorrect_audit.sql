@@ -25,8 +25,8 @@ SELECT
     rater_id,
     job_id,
     parent_label,
-    rater_response,
-    auditor_response as ground_truth,
+    COALESCE(NULLIF(rater_response, ''), '<empty>') as rater_response, 
+    COALESCE(NULLIF(auditor_response, ''), '<empty>') as ground_truth,
     confusion_type,
     is_correct
 FROM alldata

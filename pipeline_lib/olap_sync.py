@@ -36,6 +36,8 @@ def generate_olap_reports(project_id, project_base, reporting_week, target):
 
         report_path = os.path.join(olap_folder, report_name)
         pu.save_df_to_filepath(report_df, report_path)
+    
+    # Override for CB and EB
 
     return True
 

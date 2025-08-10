@@ -26,17 +26,37 @@ auditor_count AS (
     GROUP BY project_id, week_ending, workflow
 )
 ,
+rater_correct_jobs_labels AS (
+    SELECT 
+        week_ending, 
+        project_id, 
+        workflow, 
+        rater_id,
+        job_id,
+        1::INT as is_rated,
+        MAX(CASE WHEN job_correct IS NOT NULL THEN 1 ELSE 0 END) as is_audited,
+        MAX(CASE WHEN job_correct THEN 1 ELSE 0 END) as is_correct,
+        MAX(CASE WHEN job_score IS NOT NULL THEN job_score ELSE NULL END) as job_score
+    FROM alldata
+    GROUP BY week_ending, project_id, workflow, rater_id, job_id
+)
+,
 rater_correct_jobs AS (
     SELECT 
         week_ending, 
         project_id, 
         workflow, 
         rater_id, 
-        COUNT(*) as rated_jobs, 
-        COUNT(*) as audited_jobs,
-        SUM(CASE WHEN job_correct THEN 1 ELSE 0 END) as correct_jobs,
-        AVG(job_score) as rater_score
-    FROM alldata
+        SUM(is_rated) as rated_jobs, 
+        SUM(is_audited) as audited_jobs,
+        SUM(is_correct) as correct_labels, 
+        COUNT(*) as tot_labels,
+        AVG(job_score) as rater_score,
+        0::INT as tp_count,
+        0::INT as tn_count,
+        0::INT as fp_count,
+        0::INT as fn_count
+    FROM rater_correct_jobs_labels
     GROUP BY week_ending, project_id, workflow, rater_id
 )
 ,
@@ -44,78 +64,63 @@ rater_score AS (
     SELECT
         *,
         {target}::FLOAT AS target_goal,
-        CASE WHEN rated_jobs = 0 THEN NULL ELSE rater_score::FLOAT END AS rater_score
+        0::FLOAT AS rater_f1score,
+        0::FLOAT AS rater_precision,
+        0::FLOAT AS rater_recall
     FROM rater_correct_jobs
-)
-,
+),
 raters_above_target AS (
     SELECT
         *,
-        CASE WHEN rater_score >= {target}::FLOAT THEN 1 ELSE 0 END rater_is_above_target
+        CASE WHEN rater_score >= target_goal THEN 1 ELSE 0 END rater_is_above_target,
+        CASE WHEN rater_f1score >= target_goal THEN 1 ELSE 0 END rater_is_above_target_f1
     FROM rater_score
 )
+
 ,
-workflow_jobs_correct AS (
+workflow_score AS (
     SELECT 
         week_ending, 
         project_id, 
         workflow, 
-        COUNT(*)::INT as rater_count,
+        COUNT(rater_id)::INT as rater_count,
         SUM(rated_jobs)::INT as rated_jobs, 
         SUM(audited_jobs)::INT as audited_jobs,
-        SUM(correct_jobs)::INT as correct_jobs, 
-        SUM(rated_jobs)::INT as tot_jobs,
-        AVG(rater_score)::FLOAT as score,
-        0 as tp_count,
-        0 as tn_count,
-        0 as fp_count,
-        0 as fn_count,
         MAX(target_goal)::FLOAT as target_goal,
         SUM(rater_is_above_target)::INT as raters_above_target,
-        0 as raters_above_target_f1
+        SUM(rater_is_above_target_f1)::INT as raters_above_target_f1,
+        AVG(rater_score)::FLOAT as workflow_score,
+        AVG(rater_f1score)::FLOAT as workflow_f1score,
+        AVG(rater_precision)::FLOAT as workflow_precision,
+        AVG(rater_recall)::FLOAT as workflow_recall
     FROM raters_above_target
     GROUP BY week_ending, project_id, workflow
 )
 ,
-workflow_scores AS (
-    SELECT
-        *,
-        CASE WHEN tot_jobs = 0 THEN NULL ELSE score::FLOAT END AS workflow_score,
-        0::FLOAT AS workflow_f1score,
-        0::FLOAT AS workflow_precision,
-        0::FLOAT AS workflow_recall
-    FROM workflow_jobs_correct
-)
-,
+
 workflow_info AS (
     SELECT 
-        W.*,
-        A.auditor_count as auditor_count
-    FROM workflow_scores W
+        week_ending,
+        project_id,
+        workflow,
+        rater_count,
+        auditor_count as auditor_count,
+        rated_jobs as job_instances,
+        audited_jobs as audited_instances,
+        target_goal,
+        raters_above_target,
+        raters_above_target_f1,
+        workflow_score,
+        workflow_f1score,
+        workflow_precision,
+        workflow_recall,
+        AVG(workflow_score) OVER (PARTITION BY week_ending, project_id) as project_score,
+        AVG(workflow_f1score) OVER (PARTITION BY week_ending, project_id) as project_f1score,
+        AVG(workflow_precision) OVER (PARTITION BY week_ending, project_id) as project_precision,
+        AVG(workflow_recall) OVER (PARTITION BY week_ending, project_id) as project_recall
+    FROM workflow_score W
     LEFT JOIN auditor_count A
     USING (week_ending, project_id, workflow)
 )
 
-SELECT
-    project_id,
-    week_ending,
-    workflow,
-    rater_count,
-    auditor_count,
-    rated_jobs as job_instances,
-    audited_jobs as audited_instances,
-    rated_jobs as label_count,
-    correct_jobs as correct_label_count,
-    tp_count,
-    tn_count,
-    fp_count,
-    fn_count,
-    target_goal,
-    raters_above_target,
-    raters_above_target_f1,
-    workflow_score,
-    workflow_f1score,
-    workflow_precision,
-    workflow_recall
-FROM workflow_info
-
+SELECT * FROM workflow_info
