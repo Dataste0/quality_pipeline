@@ -232,7 +232,10 @@ def UQD_transform(df, stats, mod_config):
     df["rater_id"] = df["rater_id"].apply(transformer_utils.id_format_check)
     mask_cols = ["job_id", "rater_id"]
     if needs_auditor:
-        df["auditor_id"] = df["auditor_id"].apply(transformer_utils.id_format_check)
+        if quality_methodology == 'golden':
+            df["auditor_id"] = 'golden_set'
+        else:
+            df["auditor_id"] = df["auditor_id"].apply(transformer_utils.id_format_check)
         mask_cols.append("auditor_id")
 
     # Count invalid IDs

@@ -39,9 +39,10 @@ def adhoc_transform(df, stats):
     # Normalize true/false values
     df['job_correct'] = (
         df['job_correct']
-        .astype(str)
+        .astype("string")                      # preserva i NaN veri
         .str.lower()
         .str.strip()
+        .replace(r"^\s*$", pd.NA, regex=True)  # vuote/whitespace → NA
         .map({'true': True, 'false': False, 'yes': True, 'no': False})
     )
 

@@ -6,50 +6,39 @@ WITH alldata AS (
     FROM (
         SELECT *, 
                ROW_NUMBER() OVER (
-                   PARTITION BY project_id, job_id, rater_id, parent_label
+                   PARTITION BY project_id, job_id, rater_id, auditor_id, job_correct
                ) AS row_num
         FROM {input_path}
-        WHERE parent_label IS NOT NULL 
-          AND parent_label <> '' 
-          AND parent_label <> 'pipeline_error'
-          AND project_id = {project_id}
-          AND reporting_week = {reporting_week}
+        WHERE 1
+        AND job_correct IS NOT NULL
+        AND project_id = {project_id}
+        AND reporting_week = {reporting_week}
     ) t
     WHERE row_num = 1
 )
 ,
-
 
 -- Count auditors 
 auditor_count AS (
     SELECT week_ending, project_id, workflow, COUNT(DISTINCT auditor_id) as auditor_count
     FROM alldata
     GROUP BY project_id, week_ending, workflow
-),
-
--- Jobs correct
+)
+,
 rater_correct_jobs_labels AS (
     SELECT 
         week_ending, 
         project_id, 
         workflow, 
-        rater_id, 
+        rater_id,
         job_id,
-        
         1::INT as is_rated,
         1::INT as is_audited,
-
-        COUNT(*) AS tot_labels,
-        SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) as correct_labels,
-
-        SUM(CASE WHEN confusion_type = 'TP' THEN 1 ELSE 0 END) AS tp_count,
-        SUM(CASE WHEN confusion_type = 'TN' THEN 1 ELSE 0 END) AS tn_count,
-        SUM(CASE WHEN confusion_type = 'FP' THEN 1 ELSE 0 END) AS fp_count,
-        SUM(CASE WHEN confusion_type = 'FN' THEN 1 ELSE 0 END) AS fn_count
+        CASE WHEN job_correct IS TRUE THEN 1 ELSE 0 END as is_correct,
+        CASE WHEN job_correct IS FALSE THEN 1 ELSE 0 END as is_incorrect
     FROM alldata
-    WHERE auditor_id <> ''
-    GROUP BY week_ending, project_id, workflow, rater_id, job_id
-),
+)
+,
 rater_correct_jobs AS (
     SELECT 
         week_ending, 
@@ -58,12 +47,13 @@ rater_correct_jobs AS (
         rater_id, 
         SUM(is_rated) as rated_jobs, 
         SUM(is_audited) as audited_jobs,
-        SUM(correct_labels) as correct_labels, 
-        SUM(tot_labels) as tot_labels,
-        SUM(tp_count) as tp_count,
-        SUM(tn_count) as tn_count,
-        SUM(fp_count) as fp_count,
-        SUM(fn_count) as fn_count
+        SUM(is_correct) as correct_labels, 
+        SUM(is_incorrect) as incorrect_labels,
+        SUM(is_audited) as tot_labels,
+        0::INT as tp_count,
+        0::INT as tn_count,
+        0::INT as fp_count,
+        0::INT as fn_count
     FROM rater_correct_jobs_labels
     GROUP BY week_ending, project_id, workflow, rater_id
 )
@@ -72,10 +62,10 @@ rater_score AS (
     SELECT
         *,
         {target}::FLOAT AS target_goal,
-        CASE WHEN tot_labels = 0 THEN NULL ELSE correct_labels/tot_labels::FLOAT END AS rater_score,
-        CASE WHEN tp_count+fp_count+fn_count = 0 THEN NULL ELSE (2 * tp_count)/((2 * tp_count) + fp_count + fn_count)::FLOAT END AS rater_f1score,
-        CASE WHEN tp_count+fp_count = 0 THEN NULL ELSE tp_count/(tp_count + fp_count)::FLOAT END AS rater_precision,
-        CASE WHEN tp_count+fn_count = 0 THEN NULL ELSE tp_count/(tp_count + fn_count)::FLOAT END AS rater_recall
+        CASE WHEN tot_labels > 0 THEN (correct_labels::FLOAT / tot_labels) ELSE NULL END AS rater_score,
+        0::FLOAT AS rater_f1score,
+        0::FLOAT AS rater_precision,
+        0::FLOAT AS rater_recall
     FROM rater_correct_jobs
 ),
 raters_above_target AS (
@@ -85,6 +75,7 @@ raters_above_target AS (
         CASE WHEN rater_f1score >= target_goal THEN 1 ELSE 0 END rater_is_above_target_f1
     FROM rater_score
 )
+
 ,
 workflow_score AS (
     SELECT 
@@ -94,13 +85,15 @@ workflow_score AS (
         COUNT(rater_id)::INT as rater_count,
         SUM(rated_jobs)::INT as rated_jobs, 
         SUM(audited_jobs)::INT as audited_jobs,
+
         MAX(target_goal)::FLOAT as target_goal,
         SUM(rater_is_above_target)::INT as raters_above_target,
         SUM(rater_is_above_target_f1)::INT as raters_above_target_f1,
-        AVG(rater_score)::FLOAT as workflow_score,
-        AVG(rater_f1score)::FLOAT as workflow_f1score,
-        AVG(rater_precision)::FLOAT as workflow_precision,
-        AVG(rater_recall)::FLOAT as workflow_recall
+
+        CASE WHEN SUM(tot_labels) > 0 THEN (SUM(correct_labels)::FLOAT / SUM(tot_labels)) ELSE NULL END AS workflow_score,
+        0::FLOAT as workflow_f1score,
+        0::FLOAT as workflow_precision,
+        0::FLOAT as workflow_recall
     FROM raters_above_target
     GROUP BY week_ending, project_id, workflow
 )

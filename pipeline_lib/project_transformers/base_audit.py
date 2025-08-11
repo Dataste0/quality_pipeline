@@ -153,17 +153,10 @@ def base_audit_etl(df, stats, base_config):
         r = df["rater_response"].astype("string").replace(r"^\s*$", pd.NA, regex=True)
         a = df["auditor_response"].astype("string").replace(r"^\s*$", pd.NA, regex=True)
 
-        # Confronto diretto: True se uguali, False altrimenti
-        is_correct = pd.Series(False, index=df.index, dtype="boolean")
-        is_correct[r.eq(a)] = True
+        # True se uguali o entrambe NA
+        eq_or_both_null = r.eq(a) | (r.isna() & a.isna())
 
-        # Not audited -> NA
-        mask_no_auditor = (
-            df["auditor_id"].astype("string").replace(r"^\s*$", pd.NA, regex=True).isna()
-        )
-        is_correct[mask_no_auditor] = pd.NA
-
-        df["is_correct"] = is_correct
+        df["is_correct"] = eq_or_both_null.astype("boolean")
 
 
 

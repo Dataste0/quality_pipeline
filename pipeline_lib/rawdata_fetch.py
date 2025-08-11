@@ -16,13 +16,17 @@ TRANSFORMATION_QUEUE_FILE = cfg.QUEUE_TRANSFORMATION_FILE_PATH
 snapshot_queue = SnapshotManager(SNAPSHOT_QUEUE_FILE)
 transformation_queue = TransformationQueueManager(TRANSFORMATION_QUEUE_FILE)
 
+
 # --- Setup Project List
 PROJECT_MASTERFILE = cfg.PROJECT_INFO_FILE_PATH
 project_list_df = pu.load_project_info(PROJECT_MASTERFILE, active_only=False)
 
+
 # --- Logger
 import logging
 logger = logging.getLogger(__name__)
+
+
 
 # --- Scan weekly data folder
 def scan_rawdata_week_folder(
@@ -347,6 +351,7 @@ def compare_rawdata_snapshots():
     
 
     current_df = snapshot_queue.get_snapshot(current_snapshot_id)
+    #print(f"\nCURR: {current_df.head(10)}")
     # We are interested only in weeks with data
     current_df = current_df[current_df["has_weekly_data"] == True].copy()
     
@@ -367,6 +372,7 @@ def compare_rawdata_snapshots():
         previous_df = pd.DataFrame(columns=current_df.columns)
     else:
         previous_df = snapshot_queue.get_snapshot(previous_snapshot_id)
+        #print(f"\nPREV: {previous_df.head(10)}")
 
     # Safe casting
     current_df["data_week"] = pd.to_datetime(current_df["data_week"])
@@ -374,6 +380,9 @@ def compare_rawdata_snapshots():
     
     current_df["project_id"] = current_df["project_id"].astype(str).str.strip()
     previous_df["project_id"] = previous_df["project_id"].astype(str).str.strip()
+
+    current_df["folder_hash"] = current_df["folder_hash"].astype(str).str.strip()
+    previous_df["folder_hash"] = previous_df["folder_hash"].astype(str).str.strip()
 
     # Merge
     merged = pd.merge(
@@ -383,7 +392,7 @@ def compare_rawdata_snapshots():
         how="right",
         suffixes=("_prev", "_curr")
     )
-
+    
     # Safe casting
     merged["has_weekly_data_prev"] = (
         merged["has_weekly_data_prev"]
@@ -399,11 +408,11 @@ def compare_rawdata_snapshots():
         .astype(bool)
     )
 
+    
     # Find rows where weekly data availability has changed
     differing_rows = merged[(
         merged["folder_hash_prev"] != merged["folder_hash_curr"]
     )].copy()
-
 
     enqueued_items = []
 

@@ -7,7 +7,7 @@ import pipeline_lib.config as cfg
 import pipeline_lib.pipeline_utils as pu
 from pipeline_lib.project_transformers.mod_uqd import transform as trs_uqd
 from pipeline_lib.project_transformers.mod_cvs import transform as trs_cvs
-from pipeline_lib.project_transformers.mod_halo import transform as trs_halo
+from quality_pipeline.pipeline_lib.project_transformers.deprecated_mod_halo import transform as trs_halo
 
 UQDMULTI_RAWFILE_PATH = os.path.join(
     cfg.RAWDATA_ROOT_PATH, 

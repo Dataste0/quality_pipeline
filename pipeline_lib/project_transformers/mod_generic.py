@@ -52,6 +52,8 @@ def _as_boolish(series: pd.Series) -> pd.Series:
     out = out.mask(s.isin(FALSE_TOKENS), False)
     return out
 
+
+
 def generic_audit_transform(df, stats, mod_config):
     """
     MOD-CONFIG DICTIONARY FORMAT (for Audit projects)
@@ -158,7 +160,7 @@ def generic_audit_transform(df, stats, mod_config):
                 ]
             }
     """
-    
+
     info_columns = mod_config.get("info_columns", {})
 
     info_cols_map = {
@@ -196,6 +198,50 @@ def generic_audit_transform(df, stats, mod_config):
 
     stats["label_list"] = label_flat_list
 
+    # Fill rater answers for agreement/disagreement auditor columns where rater answer not recorded
+    for v in label_dicts:
+        label_name = v['label_name']
+        r_col = f"rater_{label_name}"
+        a_col = f"auditor_{label_name}"
+        col_type = v.get("auditor_column_type", "").strip().lower()
+
+        # Se non esiste la colonna del rater, creala (dtype boolean con NA)
+        if r_col not in df.columns and a_col in df.columns:
+            df[r_col] = pd.Series(pd.NA, index=df.index, dtype="boolean")
+
+        # Solo per colonne di giudizio 'agreement' applichiamo la regola richiesta
+        if a_col in df.columns and r_col in df.columns and col_type == "agreement":
+            a_bool = _as_boolish(df[a_col])  # True/False/NA (dtype boolean)
+
+            # Se la risposta dell'auditor NON è NA → rater = True
+            df.loc[~a_bool.isna(), r_col] = True
+
+            # Mantieni il dtype boolean e poi converti in stringhe lower-case
+            df[r_col] = df[r_col].astype(str).str.strip().str.lower()
+            df[a_col] = a_bool.astype(str).str.strip().str.lower()
+
+            # Caso 1: auditor boolish True -> rater = True (uguale all'auditor)
+            #df.loc[a_bool == True, r_col] = True
+
+            # Caso 2: auditor boolish False -> rater = opposto dell'auditor
+            #df.loc[(a_bool == False), r_col] = True
+
+            #df[r_col] = df[r_col].astype(str).str.strip().str.lower()
+            #df[a_col] = a_bool.astype(str).str.strip().str.lower()
+        
+        # Solo per colonne di giudizio 'disagreement' applichiamo la regola richiesta
+        if a_col in df.columns and r_col in df.columns and col_type == "disagreement":
+            a_bool = _as_boolish(df[a_col])  # True/False/NA (dtype boolean)
+
+            # Se la risposta dell'auditor NON è NA → rater = True
+            df.loc[~a_bool.isna(), r_col] = False
+
+            # Mantieni il dtype boolean e poi converti in stringhe lower-case
+            df[r_col] = df[r_col].astype(str).str.strip().str.lower()
+            df[a_col] = a_bool.astype(str).str.strip().str.lower()
+
+
+
     # Required columns
     info_columns = ["workflow", "job_date", "rater_id", "auditor_id", "job_id"]
     label_cols_renamed = [
@@ -213,8 +259,9 @@ def generic_audit_transform(df, stats, mod_config):
     df = df[df["job_date"].notnull()].copy()
 
 
-    # ["workflow", "job_date", "rater_id", "job_id"] [is_rateable|rater, is_rateable|auditor] [withhold|rater, withhold|auditor] ...
+    # ["workflow", "job_date", "rater_id", "job_id"] [rater_is_rateable, auditor_is_rateable] ...
 
+    df.to_csv('test_generic_module.csv', index=False)
     return df
 
 
@@ -239,7 +286,6 @@ def transform(df, module_info):
         "labels": [
             {
                 "label_name": item.get('label_name'),
-                "auditor_column_type": item.get('auditor_column_type'),
                 "is_label_binary": item.get('is_label_binary', False),
                 "label_binary_pos_value": item.get('label_binary_pos_value', None),
                 "weight": item.get('weight', 1)

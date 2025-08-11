@@ -35,6 +35,7 @@ rater_correct_jobs_labels AS (
         SUM(CASE WHEN confusion_type = 'FP' THEN 1 ELSE 0 END) AS fp_count,
         SUM(CASE WHEN confusion_type = 'FN' THEN 1 ELSE 0 END) AS fn_count
     FROM alldata
+    WHERE auditor_id <> ''
     GROUP BY week_ending, project_id, workflow, rater_id, parent_label
 )
 ,

@@ -1,15 +1,17 @@
 import importlib
-from pipeline_lib.project_transformers import mod_cvs, mod_uqd, mod_halo, mod_generic
+from pipeline_lib.project_transformers import mod_cvs, mod_uqd, mod_generic
 
 # --- Logger
 import logging
+
+from quality_pipeline.pipeline_lib.project_transformers import deprecated_mod_halo
 logger = logging.getLogger(__name__)
 
 
 STANDARD_DISPATCHER = {
     "UQD": mod_uqd.transform,
     "CVS": mod_cvs.transform,
-    "HALO": mod_halo.transform,
+    "HALO": deprecated_mod_halo.transform,
     "GENERIC": mod_generic.transform
 }
 

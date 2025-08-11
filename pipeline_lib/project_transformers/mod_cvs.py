@@ -244,7 +244,6 @@ def CVS_transform(df, stats, mod_config):
     # Compile stats
     stats["rows_final"] = len(df)
 
-    print(f"DONE MODULE: {df.columns}")
 
     return df
 

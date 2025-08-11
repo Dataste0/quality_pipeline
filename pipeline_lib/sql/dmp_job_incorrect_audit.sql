@@ -30,5 +30,5 @@ SELECT
     confusion_type,
     is_correct
 FROM alldata
-WHERE NOT is_correct OR is_correct = 0
+WHERE auditor_id <> '' AND (NOT is_correct OR is_correct = 0)
 LIMIT 500
