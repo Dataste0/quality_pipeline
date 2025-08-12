@@ -247,12 +247,6 @@ def get_content_weeks(submission_date_series):
 # TRANSFORMED FILES FUNCTIONS
 
 def clean_filename(orig_filename, max_len=21):
-    #cleaned = re.sub(r'[:/&%\[\]\(\)]', '', orig_filename)
-    #cleaned = re.sub(r'\s{2,}', ' ', cleaned)
-    #cleaned = re.sub(r'\s*-\s*', '-', cleaned)
-    #cleaned = cleaned.replace(' ', '-')
-    #cleaned = cleaned.replace('_', '-')
-    #cleaned = cleaned.strip('-')
     cleaned = re.sub(r'[^a-zA-Z0-9]', '', orig_filename)
     if max_len:
         cleaned = cleaned[:max_len].ljust(max_len, "0")
@@ -456,7 +450,6 @@ def check_dataset_type(file_path, dataset_type):
     header = df.columns.str.strip().tolist()
     if dataset_type == "HALO":
         halo_required_cols = ["SRT Annotator ID", "Vendor Auditor ID", "SRT Job ID", "Time (PT)", "Vendor Tag"]
-        #print(f"Checking HALO columns: {header}")
         return True if set(halo_required_cols).issubset(header) else False
     
     elif dataset_type == "UQD":

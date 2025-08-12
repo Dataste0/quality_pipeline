@@ -105,7 +105,7 @@ def scan_rawdata_week_folder(project_metadata, data_week, raw_data_root, last_sn
                 if dataset_type is not None:
                     # Perform dataset type specific checks
                     dataset_match = pu.check_dataset_type(full_path, dataset_type)
-                    print(f"Returned dataset_match: {dataset_match}")
+                    #print(f"Returned dataset_match: {dataset_match}")
                     if dataset_match:
                         dataset_format = dataset_type
                     else:

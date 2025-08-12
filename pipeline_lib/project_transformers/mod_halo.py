@@ -33,7 +33,7 @@ def halo_transform(df, stats, mod_config):
                   "auditor_id_column": "Vendor Auditor ID",
                   "job_id_column": "SRT Job ID",
                   "submission_date_column": "Time (PT)",
-                  "workflow_column": "Rubric Name",
+                  "workflow_column": "Queue Name",
                   "vendor_tag_column": "Vendor Tag"
               }
 
