@@ -1,24 +1,20 @@
 import importlib
-from pipeline_lib.project_transformers import mod_cvs, mod_uqd, mod_generic
+from pipeline_lib.project_transformers import mod_cvs, mod_uqd, mod_halo, mod_generic
+from pipeline_lib.project_transformers.transformer_utils import compute_content_week, column_replacer, string_replacer, regex_replacer
 
 # --- Logger
 import logging
-
-from quality_pipeline.pipeline_lib.project_transformers import deprecated_mod_halo
 logger = logging.getLogger(__name__)
 
 
 STANDARD_DISPATCHER = {
     "UQD": mod_uqd.transform,
     "CVS": mod_cvs.transform,
-    "HALO": deprecated_mod_halo.transform,
+    "HALO": mod_halo.transform,
     "GENERIC": mod_generic.transform
 }
 
-def get_transformer_from_metadata(metadata):
-    module_key = metadata.get("module")
-    project_id = metadata.get("project_id")
-
+def get_transformer_from_metadata(project_id, module_key):
     if not module_key:
         raise ValueError("Missing 'module' key in metadata.")
 
@@ -45,8 +41,11 @@ def get_transformer_from_metadata(metadata):
 # UNIVERSAL TRANSFORMER
 #####################
 
-def process_dataframe(df, module_info):
-    transform_function = get_transformer_from_metadata(module_info)
+def process_dataframe(df, project_metadata):
+    project_id = project_metadata.get("project_id")
+    module = project_metadata.get("project_config", {}).get("module")
+    transform_function = get_transformer_from_metadata(project_id, module)
+
     #print(f"Processing Dataframe using transformer: {transform_function.__module__}.{transform_function.__name__}")
 
     #print(f"\nModule info: {module_info}\n")
@@ -54,17 +53,26 @@ def process_dataframe(df, module_info):
     #print(f"\nProcess dataframe metadata received: {type(metadata)}\n{metadata}\n")
 
     # Collecting info about the rawdata df
-    info_dict = {
-        "module": module_info.get("module"),
+    processed_dict = {
+        "module_used": module,
         "row_count": len(df)
     }
 
+    # Pre-processing
+    module_config = project_metadata.get("project_config", {}).get("module_config", {})
+    [column_replacer(df, item) for item in module_config.get("replace_columns", [])]
+    [string_replacer(df, item) for item in module_config.get("replace_strings", [])]
+    [regex_replacer(df, item) for item in module_config.get("replace_regex", [])]
+    
+
     # Transform
-    df_transformed, etl_stats = transform_function(df, module_info)
+    df_transformed, etl_stats = transform_function(df, project_metadata)
 
-    # Force all df data types to string
-    #df_transformed = df_transformed.astype("string")
+    # Add content week column
+    content_week_serie = compute_content_week(df_transformed["job_date"])
+    df_transformed.insert(0, "content_week", content_week_serie)
 
-    info_dict["etl"] = etl_stats
 
-    return df_transformed, info_dict
+    processed_dict["etl"] = etl_stats
+
+    return df_transformed, processed_dict

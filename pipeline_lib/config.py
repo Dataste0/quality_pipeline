@@ -44,14 +44,14 @@ PIPELINE_ROOT_PATH
     └── snapshot_rawdata_folders.csv (*)
 """
 
-DATA_PROCESS_DIR = "Data_Process"
+DATA_PROCESS_DIR = "Data_Process_Refactor"
 DATA_LOG_DIR_PATH = os.path.join(PIPELINE_ROOT_PATH, DATA_PROCESS_DIR)
 
-DATA_TRANSFORMED_DIR = "Data_Transformed"
+DATA_TRANSFORMED_DIR = "Data_Transformed_Refactor"
 DATA_TRANSFORMED_DIR_PATH = os.path.join(PIPELINE_ROOT_PATH, DATA_TRANSFORMED_DIR)
 DATA_PARQUET_DIR_PATH = os.path.join(DATA_TRANSFORMED_DIR_PATH)
 
-OLAP_DIR = "OLAP_Export"
+OLAP_DIR = "OLAP_Export_Refactor"
 OLAP_EXPORT_DIR_PATH = os.path.join(PIPELINE_ROOT_PATH, OLAP_DIR, "Export")
 
 

@@ -25,11 +25,11 @@ logger = logging.getLogger(__name__)
 
 
 # --- Process file by selecting the proper transformer and saves it to an output path as transformed
-def process_file(raw_file_path, project_id, metadata, data_week):
+def process_file(raw_file_path, project_metadata, data_week):
     logger.debug(f"Processing file path: {raw_file_path}")
 
-    #print(f"DEBUG Processing. Metadata: {metadata}")
-    
+    project_id = project_metadata.get("project_id", None)
+
     # Get filename from path
     raw_filename = os.path.basename(raw_file_path)
 
@@ -43,29 +43,36 @@ def process_file(raw_file_path, project_id, metadata, data_week):
             process_file_dict["transform_info"] = {"transform_error": "empty_source_file"}
             return False, process_file_dict
 
-        logger.debug(f"Processing file: {raw_file_path} - Json: {json.dumps(metadata)}")
+        logger.debug(f"Processing file: {raw_file_path}")
         #print(f"Processing file: {raw_file_path} - Json: {metadata_str} - Output: {output_path}")
 
         # Determine module to use
-        file_fingerprint = pu.hash_header(raw_file_path)
+        project_config = project_metadata.get("project_config", {})
         
-        module_found = False
-        modules_available = metadata.get("project_config", [])
-        #print(f"\nTRANSFORM RAWDATA - DEBUG metadata: {metadata}")
-        for module_info in modules_available:
-            dataset_fingerprint = module_info.get("dataset_fingerprint", None)
-            if dataset_fingerprint == file_fingerprint:
-                module_found = True
-                #print(f"\nTRANSFORM RAWDATA - DEBUG module info: {module_info}")
-                module_info['project_id'] = metadata['project_id'] # Add project id to module info for dispatching ADHOC modules
-                module_info['reporting_week'] = pd.to_datetime(data_week, errors="coerce").strftime("%Y-%m-%d") # Add reporting week for dataset with no job date
-                df_transformed, transformed_dict = process_dataframe(df, module_info)
-                process_file_dict["transform_info"] = {"project_id": metadata["project_id"], "project_name": metadata["project_name"]} | transformed_dict
-
-        if not module_found:
-            logger.error(f"Unable to find valid project config - Dataset mismatch")
-            process_file_dict["transform_info"] = {"transform_error": "no_dataset_fingerprint_match"}
+        project_base = project_metadata.get("project_base", None)
+        base_code = project_base.upper()[0] if isinstance(project_base, str) and project_base in ["halo", "multi", "audit"] else None
+        if not project_base or not base_code:
+            logger.error(f"Project base not defined for project {project_id}")
+            process_file_dict["transform_info"] = {"transform_error": "project_base_not_defined"}
             return False, process_file_dict
+        
+        dataset_type = project_config.get("dataset_type", None)
+        module = project_config.get("module",None)
+        if not dataset_type:
+            logger.error(f"Dataset type missing in declaration")
+            process_file_dict["transform_info"] = {"transform_error": "dataset_type_missing_in_declaration"}
+            return False, process_file_dict
+        if not module:
+            logger.error(f"Module missing in declaration")
+            process_file_dict["transform_info"] = {"transform_error": "module_missing_in_declaration"}
+            return False, process_file_dict
+        
+
+        project_config['module_config']['reporting_week'] = pd.to_datetime(data_week, errors="coerce").strftime("%Y-%m-%d") # Add reporting week for dataset with no job date
+        
+        ### PROCESS DATAFRAME ###
+        df_transformed, transformed_dict = process_dataframe(df, project_metadata)
+        process_file_dict["transform_info"] = {"project_id": project_metadata["project_id"], "project_name": project_metadata["project_name"]} | transformed_dict
 
         if df_transformed.empty:
             logger.warning(f"Empty Transformed Dataframe: {raw_file_path}")
@@ -76,44 +83,34 @@ def process_file(raw_file_path, project_id, metadata, data_week):
         logger.debug(f"Done processing dataframe.")
         #print(f"\nTransformer DICT READ::{transformed_dict}")
 
-        if "etl" in transformed_dict["etl"]:
-            model_base = transformed_dict["etl"]["etl"]["base_info"]["model_base"]
-        else:
-            model_base = transformed_dict["etl"]["base_info"]["model_base"]
-        
-        base_code = None
-        if isinstance(model_base, str) and model_base.startswith("BASE-") and len(model_base) > 5:
-            base_code = model_base[5]
-        else:
-            process_file_dict["transform_info"] = {"transform_error": "model_base_undetermined" } | transformed_dict
-            return False, process_file_dict
-
         data_week = pd.to_datetime(data_week, errors="coerce")
         df_transformed.insert(0, "reporting_week", data_week)
         df_transformed.insert(0, "project_id", project_id)
 
         name_label = pu.clean_filename(raw_filename)
         data_week_str = data_week.strftime("%Y-%m-%d")
-
-        project_folder_name = metadata["raw_folder_name"]
         
+
         # Generate PARQUET output paths
         parquet_output_folder = os.path.join(PARQUET_BASE_DIR, project_id, data_week_str)
         os.makedirs(parquet_output_folder, exist_ok=True)
 
         parquet_filenames = []
         content_weeks_list = []
-        unique_content_weeks = pd.to_datetime(df_transformed["content_week"], errors="coerce").dropna().unique()
+        unique_content_weeks = df_transformed['content_week'].unique().tolist()
+        if len(unique_content_weeks) == 0:
+            process_file_dict["transform_info"] = {"transform_error": "content_weeks_list_empty" } | transformed_dict
+            return False, process_file_dict
 
+        #print(f"\nContent weeks list: {unique_content_weeks}")
         for content_week in unique_content_weeks:
-            content_week_str = content_week.strftime("%Y-%m-%d")
-            content_weeks_list.append(content_week_str)
-            cw_str = content_week.strftime("%Y%m%d")
+            content_weeks_list.append(content_week)
+            cw_str = pd.to_datetime(content_week, errors="coerce").strftime("%Y%m%d")
             
             parquet_output_name = f"{project_id}_{data_week_str}_{name_label}_{base_code}_{cw_str}.parquet"
             parquet_filenames.append(parquet_output_name)
             
-            mask = pd.to_datetime(df_transformed["content_week"], errors="coerce") == content_week
+            mask = df_transformed["content_week"] == content_week
             df_cw = df_transformed.loc[mask]
             df_cw.to_parquet(os.path.join(parquet_output_folder, parquet_output_name), index=False)
             
@@ -130,18 +127,17 @@ def process_file(raw_file_path, project_id, metadata, data_week):
 
 # Process enqueued item to trasform
 
-def process_item(row):
-    project_id = row["project_id"]
-    project_name = row["project_name"]
-    data_week = pd.to_datetime(row["data_week"], errors="coerce")
-    raw_filename = row["filename"]
-    metadata = json.loads(row['project_metadata'])
-    metadata["raw_folder_name"] = row["raw_folder_name"]
+def process_item(item):
+    project_id = item["project_id"]
+    data_week = pd.to_datetime(item["data_week"], errors="coerce")
+    raw_filename = item["filename"]
+
+    project_metadata = pu.get_project_metadata(project_id, project_list_df)
+    project_name = project_metadata["project_name"]
 
     process_item_dict = {}
-
     # Check if metadata is provided
-    if not metadata or not isinstance(metadata, dict):
+    if not project_metadata or not isinstance(project_metadata, dict):
         logger.error(f"Invalid metadata provided for file: {raw_file_path}")
         print(f"[ERROR] Invalid metadata provided for file: {raw_file_path}")
         process_item_dict["transform_info"] = {"transform_error": "no_metadata_provided"}
@@ -160,8 +156,7 @@ def process_item(row):
         return False, process_item_dict
 
     # Process the file
-    #result, transform_info = process_file(raw_file_path, project_id, metadata, data_week)
-    result, process_file_dict = process_file(raw_file_path, project_id, metadata, data_week)
+    result, process_file_dict = process_file(raw_file_path, project_metadata, data_week)
 
     process_item_dict = {
         "transform_info"    : process_file_dict.get("transform_info"),
@@ -169,7 +164,6 @@ def process_item(row):
         "output_filenames"  : process_file_dict.get("output_filenames", ""),
     }
 
-    
     return result, process_item_dict
 
 
@@ -189,24 +183,7 @@ def transform_enqueued_items():
         print(f"[{i+1}/{total_enqueued}] Processing ItemID {enqueued_item_id} | {enqueued_item['project_id']} | {enqueued_item['project_name']} | WE {enqueued_item['data_week']}")
         
         # START PROCESSING ENQUEUED ITEM
-        enqueued_df = pd.DataFrame([enqueued_item])
-        columns_to_merge = ["project_id", "project_metadata", "raw_folder_name"]
-        enriched_df = enqueued_df.merge(project_list_df[columns_to_merge], on="project_id", how="left")
-        logger.debug(f"Columns in enqueued_item after merge: {enriched_df.columns.tolist()}")
-
-        row = enriched_df.iloc[0]
-        raw_filename = row['filename']
-
-        # result = True/False
-        # process_dict = {
-        #   "output_filenames": ""
-        #   "content_weeks": ""
-        #   "transform_info": {
-        #       "transform_error": {}
-        #       ...
-        #    }
-        # }
-        result, process_dict = process_item(row)
+        result, process_dict = process_item(enqueued_item)
 
         output_filenames    = process_dict.get("output_filenames", "")
         content_weeks       = process_dict.get("content_weeks", "")
@@ -222,7 +199,7 @@ def transform_enqueued_items():
         else:
             transform_result = "failed"
             print(f"Transformation failed: {transform_error}")
-            logger.error(f"Failed to process: {raw_filename}")
+            logger.error(f"Failed to process: {enqueued_item['filename']}")
         
         # Enqueue
         transformation_queue.complete_transform(enqueued_item_id, transform_result, {

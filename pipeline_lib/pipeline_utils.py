@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import csv
 import json
 import re
@@ -39,6 +40,66 @@ def filter_inactive_projects(new_entries_df, project_df):
 
 
 # --- Extract File Pattern from Project Config
+def get_project_metadata(project_id, project_list):
+
+    project_rows = project_list.loc[project_list["project_id"] == project_id]
+    if project_rows.empty:
+        logger.error(f"Project ID '{project_id}' not found in project list")
+        print(f"[ERROR] Project ID '{project_id}' not found in project list")
+        return None
+
+    project_row = project_rows.iloc[0]
+
+    metadata = {}
+    metadata["project_id"] = project_row.get("project_id")
+    metadata["project_name"] = project_row.get("project_name")
+    metadata["project_config"] = project_row.get("project_config")
+    metadata["project_status"] = project_row.get("project_status")
+    metadata["project_is_active"] = project_row.get("project_is_active", False).astype(bool)
+    metadata["project_start_date"] = pd.to_datetime(project_row.get("project_start_date"), errors='coerce')
+    metadata["raw_folder_name"] = project_row.get("raw_folder_name", None)
+    
+    end_date = project_row.get("project_end_date", None)
+    if end_date is None or pd.isna(end_date):
+        metadata["project_end_date"] = None
+    else:
+        metadata["project_end_date"] = pd.to_datetime(end_date, errors='coerce')
+
+    raw_target = project_row.get("project_target", None)
+    # String with %
+    if isinstance(raw_target, str) and raw_target.strip().endswith('%'):
+        target_goal = float(raw_target.strip().replace('%', '')) / 100.0
+    else:
+        # If numeric string (decimal)
+        target_goal = float(raw_target)
+        # If > 1, probably in percent format (eg. 90)
+        if target_goal > 1:
+            target_goal = target_goal / 100.0
+    metadata["project_target"] = target_goal
+
+    metadata["project_methodology"] = project_row.get("project_methodology", None)
+    metadata["project_metric"] = project_row.get("project_metric", None)
+    metadata["project_data_type"] = project_row.get("project_data_type", None)
+    metadata["project_base"] = project_row.get("project_base", None)
+
+    project_config = project_row.get("project_config", "")
+    if isinstance(project_config, float) and np.isnan(project_config):
+        project_config = {}
+    else:
+        project_config = str(project_config)
+        if project_config == "":
+            project_config = {}
+        else:
+            try:
+                project_config = json.loads(project_config)
+            except json.JSONDecodeError:
+                logger.error("JSON Parsing error")
+                project_config = {}
+
+    metadata["project_config"] = project_config
+
+    return metadata
+
 
 def extract_file_pattern(files_filter_dict):
 
@@ -180,6 +241,7 @@ def get_content_weeks(submission_date_series):
     weekending_dates = dates.map(get_friday_of_week)
     unique_dates = weekending_dates.dropna().unique()
     return sorted([d.strftime("%Y-%m-%d") for d in unique_dates])
+
 
 
 # TRANSFORMED FILES FUNCTIONS
@@ -374,6 +436,51 @@ def compare_files_list(prev, curr):
             #print(f"[DEBUG] {prev_files} VS {curr_files}")
             new_files.append(f)
     return new_files
+
+
+# DATASET TYPE UTILS
+def check_dataset_type(file_path, dataset_type):
+    if not os.path.exists(file_path):
+        logger.error(f"File not found: {file_path}")
+        return None
+
+    try:
+        if file_path.lower().endswith(".csv"):
+            df = pd.read_csv(file_path, nrows=0, dtype=str)
+        elif file_path.lower().endswith((".xls", ".xlsx")):
+            df = pd.read_excel(file_path, nrows=0, dtype=str)
+    except Exception as e:
+        logger.error(f"Error reading file {file_path}: {e}")
+        return None
+
+    header = df.columns.str.strip().tolist()
+    if dataset_type == "HALO":
+        halo_required_cols = ["SRT Annotator ID", "Vendor Auditor ID", "SRT Job ID", "Time (PT)", "Vendor Tag"]
+        #print(f"Checking HALO columns: {header}")
+        return True if set(halo_required_cols).issubset(header) else False
+    
+    elif dataset_type == "UQD":
+        uqd_required_cols = ["actor_id", "quality_actor_id", "job_id", "review_ds", "queue_name", "decision_data", "quality_decision_data", "extracted_label"]
+        return True if set(uqd_required_cols).issubset(header) else False
+    
+    elif dataset_type == "CVS":
+        cvs_required_cols = ["sample_ds", "entity_id", "rater_id", "routing_name", "rater_decision_data", "auditor_decision_data", "confusion_type", "config"]
+        return True if set(cvs_required_cols).issubset(header) else False
+    
+    elif dataset_type == "UQD-LIKE":
+        uqd_like_required_cols = ["actor_id", "decision_data", "decision_id", "job_final_derived_state", "job_id", "last_review_ds", "queue_name"]
+        return True if set(uqd_like_required_cols).issubset(header) else False
+
+    elif dataset_type == "HALO-LIKE":
+        halo_like_required_cols = ["Annotator ID", "Annotation Date And Time", "Annotation Job ID", "Annotation AHT s", "Audit Date And Time", "Is Job Successful?"]
+        return True if set(halo_like_required_cols).issubset(header) else False
+    
+    elif dataset_type == "MULTI-UNPIVOTED":
+        multi_unpivoted_required_cols = ["job_id", "reviewer_id", "question", "answer"]
+        return set(multi_unpivoted_required_cols) == set(header)
+
+    return None
+
 
 
 # HASH UTILS

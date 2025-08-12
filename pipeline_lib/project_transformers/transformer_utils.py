@@ -46,14 +46,17 @@ def convert_tricky_date(date_value):
     return None
 
 
-# Get content week
- 
+# Get content week of job date
 def compute_content_week(dates: pd.Series) -> pd.Series:
     dt = pd.to_datetime(dates, errors="coerce")
+
     weekday = dt.dt.weekday  # 0=Mon ... 6=Sun
     custom_weekday = (weekday + 2) % 7
     days_to_friday = (6 - custom_weekday) % 7
-    return dt + pd.to_timedelta(days_to_friday, unit="d")
+    result_date = dt + pd.to_timedelta(days_to_friday, unit="d")
+
+    return result_date.dt.strftime('%Y-%m-%d')
+
 
 # Actor ID/Job ID check
 def id_format_check(val):
@@ -65,110 +68,189 @@ def id_format_check(val):
 
 
 #####################
-# LABEL RANKING
+# DATAFRAME FUNCTIONS
 #####################
-"""
-def generate_label_dict(parent_labels: pd.Series) -> dict:
-    # Generates a label_dict assigning a unique number to each parent_label.
-    # Labels are ordered by frequency (descending), then alphabetically for tie-breaks.
-    # Returns: {1: 'label_a', 2: 'label_b', ...}
 
-    # Filter out empty and NaN values
-    filtered = parent_labels.dropna()
-    filtered = filtered[filtered != ""]
+def column_replacer(df, replace_dict):
+    origin = replace_dict.get("from", None)
+    destination = replace_dict.get("to", None)
+    if origin and destination and origin in df.columns:
+        df.rename(columns={origin: destination}, inplace=True)
 
-    # Create frequency count
-    counts = filtered.value_counts()
+def string_replacer(df, replace_dict):
+    origin = replace_dict.get("find", None)
+    destination = replace_dict.get("replace", "")
+    column_list = replace_dict.get("columns", [])
+    if not origin or not column_list:
+        return
+    for col in column_list:
+        if col in df.columns:
+            df[col] = df[col].str.replace(origin, destination, regex=False)
 
-    # Convert to DataFrame for sorting
-    df_counts = counts.reset_index()
-    df_counts.columns = ["label", "count"]
-
-    # Sort by count descending, then label ascending (alphabetical)
-    df_counts = df_counts.sort_values(by=["count", "label"], ascending=[False, True])
-
-    # Assign rank starting from 1
-    label_dict = {str(i + 1): row["label"] for i, row in df_counts.iterrows()}
-
-    return label_dict
-
-
-def invert_label_dict(label_dict: dict) -> dict:
-    # Inverts a label_dict from {number: label} to {label: number}
-    return {v: k for k, v in label_dict.items()}
-
-
-def assign_question_number(df: pd.DataFrame, label_dict: dict | None) -> pd.DataFrame:
-    # Assigns a question_number to each row based on label_dict and label_name column.
-    # If label_dict is None, a new one is generated from df.
-
-    if label_dict is None:
-        label_dict = generate_label_dict(df['parent_label'])
-
-    #print(f"Generated label_dict: {label_dict}")
-    label_to_number = invert_label_dict(label_dict)
-
-    df["question_number"] = df["parent_label"].map(label_to_number)
-
-    return df
-"""
-
-#####################
-# DATAFRAME ENRICHER
-#####################
-"""
-def enrich_dataframe_with_metadata(df: pd.DataFrame, metadata: dict) -> pd.DataFrame:
-    module_used = get_module(metadata)
-
-    if module_used == "HALO-RUBRIC":
-        for col in halo_rubric_columns:
-            #print(f"DF cols: {df.columns}")
-            if col not in df.columns:
-                #print(f"WARNING not in df cols: {col}")
-                df[col] = ""
-        
-        # Reorder and keep only the Halo Rubric columns
-        df = df[halo_rubric_columns].copy()
-
-        # Add project_id
-        project_id = get_project_id(metadata)
-        df["project_id"] = project_id
-
-        # Replace empty values for workflow
-        df["workflow"] = df["workflow"].fillna("").astype(str).replace("", "default_workflow")
-
-        # Trim workflow names
-        df["workflow"] = df["workflow"].apply(
-            lambda x: x if len(x) <= 51 else x[:25] + "_" + x[-25:]
-        )
-
-
-    else:
-        # Ensure all universal quality columns exist
-        for col in universal_quality_columns:
-            if col not in df.columns:
-                df[col] = ""
-
-        # Reorder and keep only the universal columns
-        df = df[universal_quality_columns].copy()
-
-        # Assign question_number
-        label_dict = get_label_dict(metadata)
-        df = assign_question_number(df, label_dict)
-
-        # Add project_id
-        project_id = get_project_id(metadata)
-        df["project_id"] = project_id
-
-        # Replace empty values for workflow
-        df["workflow"] = df["workflow"].fillna("").astype(str).replace("", "default_workflow")
-        
-        # Trim workflow names
-        df["workflow"] = df["workflow"].apply(
-            lambda x: x if len(x) <= 51 else x[:25] + "_" + x[-25:]
-        )
+def regex_replacer(df, replace_dict):
+    import re
     
-    return df
-    #return df, label_dict
+    pattern = replace_dict.get("pattern")
+    replace = replace_dict.get("replace", "")
+    column_list = replace_dict.get("columns", [])
+    if not pattern or not column_list:
+        return
+    if isinstance(pattern, str):
+        pat = re.compile(pattern)
+    else:
+        pat = pattern
+    for col in column_list:
+        if col in df.columns:
+            df[col] = df[col].str.replace(pat, replace, regex=True)
 
-"""
+
+def expand_label_columns(df, label_col, prefix, excluded_list=None):
+    excluded_set = set(x.strip().lower() for x in (excluded_list or []))
+    tmp = df[[label_col]].copy()
+    tmp[label_col] = tmp[label_col].apply(lambda x: x if isinstance(x, list) else [])
+    exploded = tmp.explode(label_col).reset_index()  # mantiene indice originale
+
+    def split_kv(s):
+        if not isinstance(s, str) or "::" not in s:
+            return pd.Series({f"{prefix}_key": None, f"{prefix}_value": None})
+        k, v = s.split("::", 1)
+        k_clean = k.strip().lower()
+        return pd.Series({f"{prefix}_key": k_clean, f"{prefix}_value": v})
+
+    kv = exploded[label_col].apply(split_kv)
+    exploded = pd.concat([exploded, kv], axis=1)
+
+    # scarta le key escluse (senza prefisso: qui è solo 'quality', 'speed', ecc.)
+    exploded = exploded[~exploded[f"{prefix}_key"].isin(excluded_set)]
+
+    pivoted = (
+        exploded
+        .dropna(subset=[f"{prefix}_key"])
+        .pivot_table(
+            index=exploded["index"],
+            columns=f"{prefix}_key",
+            values=f"{prefix}_value",
+            aggfunc=lambda x: x.iloc[0] if len(x) else None,
+        )
+    )
+    pivoted.columns = [f"{prefix}_{col}" for col in pivoted.columns]
+    pivoted = pivoted.reindex(df.index, fill_value=None)
+    return pivoted
+
+
+
+def to_long(result: pd.DataFrame,
+            base_cols: list[str],
+            all_labels: list[str] | None = None) -> pd.DataFrame:
+    # deduci le label se non fornite
+    if all_labels is None:
+        r_labels = [c[2:] for c in result.columns if c.startswith("r_")]
+        a_labels = [c[2:] for c in result.columns if c.startswith("a_")]
+        # preserva ordine: prima rater poi eventuali extra auditor
+        all_labels = list(dict.fromkeys(r_labels + a_labels))
+
+    has_auditor = any(c.startswith("a_") for c in result.columns)
+    n = len(result)
+    base = result[base_cols].copy()
+
+    frames = []
+    for label in all_labels:
+        r_col = f"r_{label}"
+        r = result[r_col] if r_col in result.columns else pd.Series([""]*n, index=result.index)
+
+        df_lab = base.copy()
+        df_lab["parent_label"] = label
+        df_lab["rater_response"] = r.fillna("")
+
+        if has_auditor:
+            a_col = f"a_{label}"
+            a = result[a_col] if a_col in result.columns else pd.Series([""]*n, index=result.index)
+            df_lab["auditor_response"] = a.fillna("")
+
+        frames.append(df_lab)
+
+    out = pd.concat(frames, ignore_index=True)
+
+    # opzionale: ordina in modo stabile
+    #sort_cols = base_cols + ["parent_label"]
+    #out = out.sort_values(sort_cols, kind="stable").reset_index(drop=True)
+    return out
+
+
+
+def add_binary_flags(df_long: pd.DataFrame, binary_labels: list[dict]) -> pd.DataFrame:
+    out = df_long.copy()
+
+    # mappa: parent_label -> binary_pos_value (case-insensitive su label e valori)
+    pos_map = {d["label_name"]: str(d["binary_positive_value"])
+               for d in binary_labels}
+
+    # normalizziamo label e risposte
+    lbl = out["parent_label"].astype(str)
+    r_resp = out["rater_response"].fillna("").astype(str)
+    has_aud = "auditor_response" in out.columns
+    if has_aud:
+        a_resp = out["auditor_response"].fillna("").astype(str)
+
+    # is_label_binary: True se la label è nel dizionario
+    out["is_label_binary"] = lbl.isin(pos_map.keys())
+
+    # valore positivo atteso per la label (NaN se non binaria)
+    expected_pos = lbl.map(pos_map)
+
+    # rater_positive: True se binaria e match col valore positivo
+    out["rater_positive"] = out["is_label_binary"] & (r_resp == expected_pos)
+
+    # auditor_positive: se c'è la colonna; altrimenti crea colonna con NA
+    if has_aud:
+        out["auditor_positive"] = out["is_label_binary"] & (a_resp == expected_pos)
+    #else:
+    #    out["auditor_positive"] = pd.NA  # nessun auditor in questo dataset
+
+    # confusion_type solo per label binarie e solo se l'auditor esiste
+    if has_aud:
+        rp = out["rater_positive"]
+        ap = out["auditor_positive"]
+
+        out["confusion_type"] = ""
+        # TP, FP, FN, TN
+        out.loc[out["is_label_binary"] & (rp & ap), "confusion_type"] = "TP"
+        out.loc[out["is_label_binary"] & (rp & ~ap), "confusion_type"] = "FP"
+        out.loc[out["is_label_binary"] & (~rp & ap), "confusion_type"] = "FN"
+        out.loc[out["is_label_binary"] & (~rp & ~ap), "confusion_type"] = "TN"
+    #else:
+        # senza auditor non ha senso la confusione → stringa vuota
+        #out["confusion_type"] = ""
+    
+    out.drop(columns=["rater_positive", "auditor_positive"], inplace=True, errors="ignore")
+
+    return out
+
+
+
+def add_responses_match(df_long: pd.DataFrame,
+                        col_name: str = "is_correct",
+                        case_sensitive: bool = True,
+                        strip: bool = True) -> pd.DataFrame:
+    out = df_long.copy()
+
+    if "auditor_response" not in out.columns:
+        # Se non esiste la colonna auditor, non è confrontabile: metto NA booleani
+        #out[col_name] = pd.Series([pd.NA] * len(out), dtype="boolean")
+        return out
+
+    r = out["rater_response"].fillna("").astype("string")
+    a = out["auditor_response"].fillna("").astype("string")
+
+    if strip:
+        r = r.str.strip()
+        a = a.str.strip()
+    if not case_sensitive:
+        r = r.str.lower()
+        a = a.str.lower()
+
+    out[col_name] = (r == a)
+
+    return out
+
+

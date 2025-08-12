@@ -5,7 +5,19 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pipeline_lib.config as cfg
 import pipeline_lib.pipeline_utils as pu
-from pipeline_lib.project_transformers.mod_uqd import transform
+from pipeline_lib.project_transformers.dispatcher import process_dataframe
+
+RAW_GENERIC_MULTI_UNPIV = os.path.join(
+    cfg.RAWDATA_ROOT_PATH,
+    "a01Hs00001q1a2VIAQ_Crawling Correctness-Media", "WE 2025.07.18",
+    "media_appen_all_answers_prod_daily_2025-07-17.csv"
+)
+
+RAW_GENERIC = os.path.join(
+    cfg.RAWDATA_ROOT_PATH,
+    "a01Hs00001q1a2WIAQ_Crawling Structured Description", "WE 2025.07.04",
+    "annotation_structured_description_all_last_day_audits_2025-07-04.csv"
+)
 
 RAWFILE_PATH = os.path.join(
     cfg.RAWDATA_ROOT_PATH, 
@@ -33,65 +45,78 @@ RAW_HALO = os.path.join(
     "Baikal_HA Data_WE 2025.06.20.csv")
 
 METADATA_GENERIC = {
-  "project_id": "a01TR00000MBZKQYA5n1",
-  "project_name": "Objective Quality for Threads - Bait",
-  "project_config": [
-      {
-          "files_filter": {
-              "begins_with": "",
-              "contains": ["Objective Quality for Threads"],
-              "ends_with": ".csv"
-          },
-          "dataset_fingerprint": "3bc6109e71623b915afbaa7bc7b4a12d",
-          "module": "GENERIC",
-          "module_config": {
-              "quality_methodology": "audit",
-              "excluded_labels": [],
-              "binary_labels": [],
-              "info_columns": {
-                    "rater_id_column": "Annotator ID",
-                    "auditor_id_column": "Auditor ID",
-                    "job_id_column": "Annotation Job ID",
-                    "submission_date_column": "Annotation Date And Time"
-              },
-              "labels": [
-                  {
-                      "label_name": "url_classification",
-                      "rater_label_column": "Annotation URL Classification",
-                      "auditor_label_column": "Audit URL Classification",
-                      "auditor_column_type": "answer",
-                      "is_label_binary": True,
-                      "label_binary_pos_value": "yes",
-                      "weight": "",
-                  },
-                  {
-                      "label_name": "url_classification_correct",
-                      "rater_answer_not_recorded": True,
-                      "auditor_label_column": "KPI: Is URL classified correctly?",
-                      "auditor_column_type": "agreement",
-                  },
-                  {
-                      "label_name": "title_annotation_correct",
-                      "rater_answer_not_recorded": True,
-                      "auditor_label_column": "KPI: Is Title annotated correctly?",
-                      "auditor_column_type": "agreement",
-                  },
-                  {
-                      "label_name": "main_description_correct",
-                      "rater_answer_not_recorded": True,
-                      "auditor_label_column": "KPI: Is main-description annotated correctly?",
-                      "auditor_column_type": "agreement",
-                  },
-                  {
-                      "label_name": "additional_description_correct",
-                      "rater_answer_not_recorded": True,
-                      "auditor_label_column": "KPI: Is additional-description annotated correctly?",
-                      "auditor_column_type": "agreement",
-                  }
-              ]
-          }
-      }
-  ]
+    "project_id": "test",
+    "project_name": "test",
+    "project_config": {
+        "files_filter": {
+            "begins_with": "",
+            "contains": ["Objective Quality for Threads"],
+            "ends_with": ".csv"
+        },
+        "dataset_type": "GENERIC",
+        "module": "GENERIC",
+        "module_config": {
+            "quality_methodology": "audit",
+            "info_columns": {
+                "rater_id_column": "Annotator ID",
+                "auditor_id_column": "Auditor ID",
+                "job_id_column": "Annotation Job ID",
+                "job_date_column": "Annotation Date And Time"
+            },
+            "labels": [
+                {
+                    "label_name": "url_classification",
+                    "rater_label_column": "Annotation URL Classification",
+                    "auditor_label_column": "Audit URL Classification",
+                    "auditor_column_type": "answer",        
+                },
+                {
+                    "label_name": "url_classification_correct",
+                    "auditor_label_column": "KPI: Is URL classified correctly?",
+                    "auditor_column_type": "agreement",
+                    "empty_as": False
+                },
+                {
+                    "label_name": "title_annotation_correct",
+                    "auditor_label_column": "KPI: Is Title annotated correctly?",
+                    "auditor_column_type": "agreement",
+                    "empty_as": False
+                },
+                {
+                    "label_name": "main_description_correct",
+                    "auditor_label_column": "KPI: Is main-description annotated correctly?",
+                    "auditor_column_type": "disagreement",
+                    "empty_as": False
+                }
+
+            ]
+        }
+    }
+}
+
+METADATA_GENERIC_MULTI_UNPIV = {
+    "project_id": "test",
+    "project_name": "test",
+    "project_config": {
+        "files_filter": {
+            "begins_with": "",
+            "contains": ["Objective Quality for Threads"],
+            "ends_with": ".csv"
+        },
+        "dataset_type": "GENERIC",
+        "module": "GENERIC",
+        "module_config": {
+            "info_columns": {
+                    "rater_id_column": "reviewer_id",
+                    "job_id_column": "job_id",
+                    "_job_date_column": "missing"
+            },
+            "quality_methodology": "multi",
+            "data_structure": "unpivoted",
+            "label_column": "question",
+            "rater_response_column": "answer"
+        }
+    }
 }
 
 METADATA_CVS = {
@@ -247,19 +272,82 @@ METADATA_UQD_NOEXTRACT = {
       }
   ]
 }
+
+METADATA_MADLLAMA = {
+  "project_id": "a01TR00000Eb8K1YAJ",
+  "project_name": "ML Text Generation MAdLlama",
+  "project_config": {
+          "files_filter": {
+              "begins_with": "MAdLlama",
+              "contains": [],
+              "ends_with": ".csv"
+          },
+          "dataset_type": "UQD-LIKE",
+          "module": "UQD",
+          "module_config": {
+              "replace_columns": [
+                {"from": "last_review_ds", "to": "review_ds" }
+              ],
+              "replace_regex": [
+                {"pattern": "(?<=[a-zA-Z])'(?=[a-zA-Z])", "replace": "’", "columns": ["decision_data"] },
+                {"pattern": "(?<=s)'(?=[\s\.])", "replace": "’", "columns": ["decision_data"] },
+                {"pattern": "(?<=\s)'(?=[a-zA-Z])", "replace": "’", "columns": ["decision_data"] }
+              ],
+              "use_extracted": False,
+              "quality_methodology": "multi",
+              "excluded_labels": ["hallucination_example", "omit_example"],
+              "binary_labels": []
+          }      
+    }
+}
 RAWFILE_UQD_NOEXTRACT = os.path.join(
     cfg.RAWDATA_ROOT_PATH, 
     "a01TR00000Eb8K1YAJ_ML Text Generation MAdLlama", "WE 2025.07.04", 
     "MAdLlama (Adur) Raw data_PT WE07.04.csv")
 
-df = pu.load_df_from_filepath(RAWFILE_UQD_NOEXTRACT)
+RAW_MADLLAMA = os.path.join(
+    cfg.RAWDATA_ROOT_PATH,
+    "a01TR00000Eb8K1YAJ_ML Text Generation MAdLlama", "WE 2025.07.25",
+    "MAdLlama (Adur) Raw data_PT WE07.25.csv"
+)
 
-#df_out, info = process_dataframe(df, METADATA)
-project_config_dict = METADATA_UQD_NOEXTRACT["project_config"][0]
-print(f"\nTEST project config: {project_config_dict}")
-#mod_config = project_config_dict["module_config"]
-#print(f"\nTEST mod config: {mod_config}")
-df_out, stats = transform(df, project_config_dict)
+RAW_CRAWLING = os.path.join(
+    cfg.RAWDATA_ROOT_PATH,
+    "a01Hs00001q1a21IAA_Crawling-Interactive Annotation-Variants","WE 2025.07.25",
+    "annotation_variants_all_jobs_2025-07-25.csv"
+)
+
+METADATA_CRAWLING = {
+  "project_id": "test",
+  "project_name": "test",
+  "project_config": {
+          "files_filter": {
+              "begins_with": "test",
+              "contains": [],
+              "ends_with": ".csv"
+          },
+          "dataset_type": "HALO-LIKE",
+          "module": "GENERIC",
+          "module_config": {
+              "info_columns": {
+                    "rater_id_column": "Annotator ID",
+                    "auditor_id_column": "Auditor ID",
+                    "job_id_column": "Annotation Job ID",
+                    "job_date_column": "Annotation Date And Time"
+                },
+                "quality_methodology": "outcome",
+                "outcome_column": "Is Job Successful?",
+                "discard_if_empty": True,
+                "positive_outcome": "TRUE"
+          }      
+    }
+}
+
+df = pu.load_df_from_filepath(RAW_CRAWLING)
+project_metadata = METADATA_CRAWLING
+print(f"\nMetadata {type(project_metadata)}\n{project_metadata}\n")
+#project_metadata["project_config"]["module_config"]["reporting_week"] = "1985-01-14"
+df_out, stats = process_dataframe(df, project_metadata)
 
 print(f"\nSTATS {stats}")
 df_out.to_csv('test_module.csv', index=False)

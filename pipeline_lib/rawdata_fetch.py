@@ -29,16 +29,11 @@ logger = logging.getLogger(__name__)
 
 
 # --- Scan weekly data folder
-def scan_rawdata_week_folder(
-    project_id,
-    project_name,
-    project_is_active,
-    project_config_list,
-    data_week,
-    raw_data_root,
-    last_snapshot,
-    create_missing
-):
+def scan_rawdata_week_folder(project_metadata, data_week, raw_data_root, last_snapshot, create_missing):
+
+    project_id = project_metadata['project_id']
+    project_name = project_metadata['project_name']
+    project_config = project_metadata.get("project_config", {})
 
     logger.info(f"Scanning folder: {project_id} | {project_name} // {data_week}")
     print(f"Scanning folder: {project_id} | {project_name} // {data_week}")
@@ -56,9 +51,7 @@ def scan_rawdata_week_folder(
             return None
     
     # Fast Hash of directory
-    directory_hash = pu.hash_directory_fast(folder_path, project_is_active) # want to ensure hash changes if project switches inactive -> active
-    #print(f"Last snapshot cols: {len(last_snapshot)}, {last_snapshot.get('folder_hash')}, empty? {last_snapshot.empty}")
-    #print(f"Directory Fast hash ready: {directory_hash} - Previous hash: {last_snapshot.get('folder_hash')}")
+    directory_hash = pu.hash_directory_fast(folder_path, project_metadata['project_is_active']) # want to ensure hash changes if project switches inactive -> active
 
     if not last_snapshot.empty and last_snapshot.get("folder_hash") == directory_hash:
         #print("Weelky folder hash match. No changes made.")
@@ -91,46 +84,50 @@ def scan_rawdata_week_folder(
         if not files_available:
             logger.debug(f"Empty folder: {folder_path}")
 
-
         file_existing_list = []
         
         for f in sorted(files_available):
-            
             full_path = os.path.join(folder_path, f)
             file_hash = None
             regex_matched = False
-            format_ok = False
-
-            for item in project_config_list:
-                item_regex = item['files_filter_regex']
-                item_pattern = item['files_filter_pattern']
-                if item_regex is None:
-                    continue
-                
-                if item_regex.match(f):
-                    regex_matched = True
-                    #print("Regex match found for file:", f, "Pattern:", item_pattern, "Dataset fingerprint:", item.get("dataset_fingerprint"))
-                    dataset_fingerprint = item.get("dataset_fingerprint")
-                    header_computed = pu.hash_header(full_path)
-                    format_ok = header_computed == dataset_fingerprint
-
-                    file_hash = pu.hash_file(full_path)
-                    # trovato il primo match: esci dal loop degli item
-                    break
+            dataset_format = None
             
+            project_config_regex = project_config.get('files_filter_regex', None)
+            project_config_pattern = project_config.get('files_filter_pattern', None)
+            if project_config_regex is None:
+                continue
+                
+            if project_config_regex.match(f):
+                regex_matched = True
+                    
+                # Check dataset type
+                dataset_type = project_config.get("dataset_type", None)
+                if dataset_type is not None:
+                    # Perform dataset type specific checks
+                    dataset_match = pu.check_dataset_type(full_path, dataset_type)
+                    print(f"Returned dataset_match: {dataset_match}")
+                    if dataset_match:
+                        dataset_format = dataset_type
+                    else:
+                        dataset_format = f"invalid:{dataset_type}"
+                else:
+                    dataset_format = f"invalid:not_declared"
+
+                file_hash = pu.hash_file(full_path)
+
             #print(f"File {f} - Regex match: {regex_matched} - Format OK: {format_ok}")
                          
             file_existing_list.append({
                 "filename": f,
                 "hash": file_hash,
                 "naming_filter" : "match" if regex_matched else "no_match",
-                "dataset_fingerprint": "match" if format_ok else "no_match"
+                "dataset_format": dataset_format
             })
 
 
         matching_files = [
             info for info in file_existing_list
-            if info["naming_filter"] == "match" and info["dataset_fingerprint"] == "match"
+            if info["naming_filter"] == "match" and not info["dataset_format"].startswith("invalid:")
         ]
 
         if file_existing_list and not matching_files:
@@ -161,63 +158,40 @@ def scan_rawdata_week_folder(
 
 
 
-def scan_rawdata_project_folder(
-    project_id,
-    project_name,
-    project_is_active,
-    project_folder_name,
-    project_start_date,
-    project_end_date,
-    project_metadata,
-    raw_data_root,
-    last_snapshot,
-    create_missing
-):
+def scan_rawdata_project_folder(project_metadata, raw_data_root, last_snapshot, create_missing):
 
-    logger.debug(
-        f"Scanning project folder: {project_name} | create_missing={create_missing}"
-    )
-
-    # ---- Parse metadata safely
-    try:
-        # Accept both dict and JSON string
-        if isinstance(project_metadata, dict):
-            metadata_dict = project_metadata
-        elif isinstance(project_metadata, str) and project_metadata.strip():
-            metadata_dict = json.loads(project_metadata)
-        else:
-            logger.warning(f"Empty metadata for project {project_id} ({project_name}). Using defaults.")
-            metadata_dict = {}
-    except Exception as e:
-        # Keep running even if metadata is invalid.
-        logger.warning(
-            f"Invalid metadata JSON for project {project_id} ({project_name}): {e}. Using defaults."
-        )
-        metadata_dict = {}
-    
-    project_config_list = metadata_dict.get("project_config", [])
+    project_id = project_metadata.get("project_id")
+    project_name = project_metadata.get("project_name")
+    project_folder_name = project_metadata.get("raw_folder_name")
+    project_start_date = project_metadata.get("project_start_date")
+    project_end_date = project_metadata.get("project_end_date")
     scan_log = []
+
+    logger.debug(f"Scanning project folder: {project_name} | create_missing={create_missing}")
+
+    project_config = project_metadata.get("project_config", {})
+    if not project_config:
+        return []
     
     # ---- Pre-compile filters per project_config item
-    for item in project_config_list:
-        file_pattern_dict = item.get("files_filter", {})
-        file_pattern_flat = pu.extract_file_pattern(file_pattern_dict)
+    file_pattern_dict = project_config.get("files_filter", {})
+    file_pattern_flat = pu.extract_file_pattern(file_pattern_dict)
 
-        # Validate file pattern
-        if not isinstance(file_pattern_flat, str) or not file_pattern_flat.strip():
-            logger.warning(f"No file_pattern defined for {project_id} ({project_name}). Using wildcard ALL files.")
-            file_pattern_flat = ".*"
+    # Validate file pattern
+    if not isinstance(file_pattern_flat, str) or not file_pattern_flat.strip():
+        logger.warning(f"No file_pattern defined for {project_id} ({project_name}). Using wildcard ALL files.")
+        file_pattern_flat = ".*"
 
-        try:
-            regex = re.compile(file_pattern_flat)
-        except re.error:
-            # Preserve original behavior: abort on invalid regex.
-            logger.warning(f"Invalid regex for {project_id} ({project_name})")
-            return None
+    try:
+        regex = re.compile(file_pattern_flat)
+    except re.error:
+        # Preserve original behavior: abort on invalid regex.
+        logger.warning(f"Invalid regex for {project_id} ({project_name})")
+        return None
         
-        # Store compiled regex and the original pattern for downstream use.
-        item['files_filter_regex'] = regex
-        item['files_filter_pattern'] = file_pattern_flat
+    # Store compiled regex and the original pattern for downstream use.
+    project_config['files_filter_regex'] = regex
+    project_config['files_filter_pattern'] = file_pattern_flat
 
 
     # ---- Ensure project folder exists
@@ -235,11 +209,13 @@ def scan_rawdata_project_folder(
     else:
         project_folder_path = project_folder_info["path"]
 
-    # ---- Build weekly date range and normalize snapshots
-    # Generate list of weekly end dates between start and end
+    # Build weekly date range
     date_list = pu.generate_we_dates(project_start_date, project_end_date)
     logger.debug(f"Generated weekly dates: {date_list}")
+    
+    # Normalize snapshot date
     last_snapshot['data_week'] = pd.to_datetime(last_snapshot['data_week'])
+
 
     # ---- Iterate weeks and scan week folders
     for we_date in date_list:
@@ -256,10 +232,7 @@ def scan_rawdata_project_folder(
             snapshot_row = pd.Series(dtype='object')
 
         result = scan_rawdata_week_folder(
-            project_id=project_id,
-            project_name=project_name,
-            project_is_active=project_is_active,
-            project_config_list=project_config_list,
+            project_metadata=project_metadata,
             data_week=we_date.strftime("%Y-%m-%d"),
             raw_data_root=raw_data_root,
             last_snapshot=snapshot_row,
@@ -283,15 +256,13 @@ def scan_rawdata(project_df, raw_data_root, last_snapshot, create_missing):
 
     scan_log = []
 
+    # Iterate Projects on Project masterfile
     for _, row in project_df.iterrows():
+        project_id = row["project_id"]
+        metadata = pu.get_project_metadata(project_id, project_df)
+        
         result = scan_rawdata_project_folder(
-            project_id=row["project_id"],
-            project_name=row["project_name"],
-            project_is_active=row["project_is_active"],
-            project_folder_name=row["raw_folder_name"],
-            project_start_date=row["project_start_date"],
-            project_end_date=row["project_end_date"],
-            project_metadata=row['project_metadata'],
+            project_metadata=metadata,
             raw_data_root=raw_data_root,
             last_snapshot=last_snapshot,
             create_missing=create_missing
@@ -334,6 +305,7 @@ def generate_rawdata_snapshot():
 
 
 
+
 ######## Compare snapshots ########
 
 def compare_rawdata_snapshots():
@@ -351,8 +323,6 @@ def compare_rawdata_snapshots():
     
 
     current_df = snapshot_queue.get_snapshot(current_snapshot_id)
-    #print(f"\nCURR: {current_df.head(10)}")
-    # We are interested only in weeks with data
     current_df = current_df[current_df["has_weekly_data"] == True].copy()
     
     # Keep only relevant columns
