@@ -152,15 +152,19 @@ def generic_transform(df, stats, mod_config):
 
     info_columns = mod_config.get("info_columns", {})
     quality_methodology = mod_config.get("quality_methodology", None)
-    data_structure = mod_config.get("data_structure", None)
-    excluded_labels = mod_config.get("excluded_labels", [])
-
     stats["quality_methodology"] = quality_methodology
     needs_auditor = quality_methodology in ["audit", "outcome"]
-
-    if quality_methodology == "multi" and not data_structure:
-        stats["transform_error"] = "data_structure_missing"
-        return pd.DataFrame()
+    
+    excluded_labels = mod_config.get("excluded_labels", [])
+    stats["excluded_labels"] = excluded_labels
+    
+    data_structure = mod_config.get("data_structure", None)
+    if quality_methodology == "multi":
+        if not data_structure:
+            stats["transform_error"] = "data_structure_missing"
+            return pd.DataFrame()
+        stats["data_structure"] = data_structure
+    
     
 
     # MAP INFO COLUMNS
@@ -188,6 +192,7 @@ def generic_transform(df, stats, mod_config):
     if not job_date_col:
         reporting_week = mod_config.get("reporting_week")
         #print(f"Missing JOB DATE. Forcing reporting week {reporting_week}")
+        stats["reporting_week_fallback"] = reporting_week
         df["job_date"] = pd.to_datetime(reporting_week, errors="coerce").strftime("%Y-%m-%d")
         job_date_col = "job_date"
     #else:

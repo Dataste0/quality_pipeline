@@ -1,4 +1,5 @@
 import importlib
+from turtle import pd
 from pipeline_lib.project_transformers import mod_cvs, mod_uqd, mod_halo, mod_generic
 from pipeline_lib.project_transformers.transformer_utils import compute_content_week, column_replacer, string_replacer, regex_replacer
 
@@ -69,9 +70,9 @@ def process_dataframe(df, project_metadata):
     df_transformed, etl_stats = transform_function(df, project_metadata)
 
     # Add content week column
-    content_week_serie = compute_content_week(df_transformed["job_date"])
-    df_transformed.insert(0, "content_week", content_week_serie)
-
+    if not df_transformed.empty and "job_date" in df_transformed.columns:
+        content_week_serie = compute_content_week(df_transformed["job_date"])
+        df_transformed.insert(0, "content_week", content_week_serie)
 
     processed_dict["etl"] = etl_stats
 

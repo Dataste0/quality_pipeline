@@ -76,7 +76,6 @@ def process_file(raw_file_path, project_metadata, data_week):
 
         if df_transformed.empty:
             logger.warning(f"Empty Transformed Dataframe: {raw_file_path}")
-            #print(f"[WARNING] Empty Transformed Dataframe: {raw_file_path}")
             process_file_dict["transform_info"] = {"transform_error": "empty_output_file" } | transformed_dict
             return False, process_file_dict
         
