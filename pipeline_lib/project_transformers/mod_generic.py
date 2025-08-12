@@ -173,10 +173,11 @@ def generic_transform(df, stats, mod_config):
         info_columns.get('job_id_column', None)   : "job_id"
     }
 
-    if info_columns.get('workflow_column'):
-        info_cols_map[info_columns['workflow_column']] = "workflow"
-    else:
+    workflow_col = info_columns.get('workflow_column')
+    if not workflow_col:
         df["workflow"] = "default_workflow"
+        workflow_col = "workflow"
+    info_cols_map[workflow_col] = "workflow"
     
     # può mancare la colonna auditor_id se è un multireview
     if needs_auditor:

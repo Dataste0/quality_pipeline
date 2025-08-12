@@ -69,8 +69,8 @@ def scan_rawdata_week_folder(project_metadata, data_week, raw_data_root, last_sn
             "valid_files_list": last_snapshot['valid_files_list']
         }
     
-    print(f"Weekly Folder doesnt match previous hash. Checking folder content... {project_id} ({project_name}) {folder_name}")
-    logger.info(f"Weekly Folder doesnt match previous hash. Checking folder content... {project_id} ({project_name}) {folder_name}")
+    print(f"Weekly Folder doesnt match previous hash. Checking folder content...")
+    logger.info(f"Weekly Folder doesnt match previous hash. Checking folder content: {project_id} ({project_name}) {folder_name}")
     try:
         # Consider only non-empty CSV/Excel files with at least one data row
         allowed_exts = ('.csv', '.xls', '.xlsx')
@@ -165,13 +165,20 @@ def scan_rawdata_project_folder(project_metadata, raw_data_root, last_snapshot, 
     project_folder_name = project_metadata.get("raw_folder_name")
     project_start_date = project_metadata.get("project_start_date")
     project_end_date = project_metadata.get("project_end_date")
+    project_is_active = project_metadata.get("project_is_active", False)
     scan_log = []
 
     logger.debug(f"Scanning project folder: {project_name} | create_missing={create_missing}")
 
     project_config = project_metadata.get("project_config", {})
     if not project_config:
-        return []
+        if project_is_active:
+            print(f"Error: No project_config found for ACTIVE project {project_id} ({project_name}).")
+            raise
+        else:
+            logger.warning(f"No project_config found for {project_id} ({project_name}). Skipping scan.")
+            print(f"WARNING: No project_config found for {project_id} ({project_name}). Skipping scan.")
+            return []
     
     # ---- Pre-compile filters per project_config item
     file_pattern_dict = project_config.get("files_filter", {})
@@ -257,7 +264,9 @@ def scan_rawdata(project_df, raw_data_root, last_snapshot, create_missing):
     scan_log = []
 
     # Iterate Projects on Project masterfile
+    project_counter = 0
     for _, row in project_df.iterrows():
+        print(f"Processing project {project_counter+1}/{len(project_df)}: {row['project_id']} ({row['project_name']})")
         project_id = row["project_id"]
         metadata = pu.get_project_metadata(project_id, project_df)
         
@@ -267,11 +276,14 @@ def scan_rawdata(project_df, raw_data_root, last_snapshot, create_missing):
             last_snapshot=last_snapshot,
             create_missing=create_missing
         )
+        project_counter += 1
 
         if result:
             scan_log.extend(result)
         else:
             logger.warning(f"No scan result for project {row['project_id']} ({row['project_name']})")
+    
+    print(f"Processed {project_counter} projects.")
 
     logger.debug("Rawdata folder scan complete.")
     return pd.DataFrame(scan_log)
@@ -288,15 +300,19 @@ def generate_rawdata_snapshot():
     logger.info(f"Creating rawdata snapshot")
 
     # Filter projects with track_data enabled
-    project_df = project_list_df[project_list_df["track_data"] == True]
+    #project_df = project_list_df[project_list_df["track_data"] == True]
+    
+    project_df = project_list_df
+    #print(f"Found {len(project_df)} projects to scan for rawdata.")
+    
 
     # Get last snapshot for directory hash comparison
     last_snapshot_id = snapshot_queue.get_last_snapshot_no()
-    last_snaphot = snapshot_queue.get_snapshot(last_snapshot_id)
+    last_snapshot = snapshot_queue.get_snapshot(last_snapshot_id)
 
     # Scans and populates the snapshot dataframe
-    snapshot_df = scan_rawdata(project_df, RAW_DATA_ROOT, last_snaphot, create_missing=True)
-    
+    snapshot_df = scan_rawdata(project_df, RAW_DATA_ROOT, last_snapshot, create_missing=True)
+
     # Append to queue
     snapshot_queue.add_snapshot(snapshot_df)
 
