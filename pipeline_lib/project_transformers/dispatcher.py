@@ -27,7 +27,6 @@ def get_transformer_from_metadata(project_id, module_key):
             raise ValueError("Missing 'project_id' in metadata for ADHOC module.")
         
         try:
-#            adhoc_module = importlib.import_module(f"project_transformers.mod_{project_id}")
             adhoc_module = importlib.import_module(f"pipeline_lib.project_transformers.mod_{project_id}")
             return getattr(adhoc_module, "transform")
         except (ImportError, AttributeError) as e:
@@ -47,11 +46,6 @@ def process_dataframe(df, project_metadata):
     module = project_metadata.get("project_config", {}).get("module")
     transform_function = get_transformer_from_metadata(project_id, module)
 
-    #print(f"Processing Dataframe using transformer: {transform_function.__module__}.{transform_function.__name__}")
-
-    #print(f"\nModule info: {module_info}\n")
-
-    #print(f"\nProcess dataframe metadata received: {type(metadata)}\n{metadata}\n")
 
     # Collecting info about the rawdata df
     processed_dict = {
