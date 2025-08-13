@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 TRUE_TOKENS  = {"1", "true", "yes", "y", "t", "agree", "correct"}
 FALSE_TOKENS = {"0", "false", "no", "n", "f", "disagree", "incorrect"}
 
-def as_boolish_series(s: pd.Series, na_as=False) -> pd.Series:
+def as_boolish_series(s: pd.Series, na_as=np.nan) -> pd.Series:
     """
     Converte una Series in booleano True/False in modo vectorizzato.
     
@@ -31,27 +31,30 @@ def as_boolish_series(s: pd.Series, na_as=False) -> pd.Series:
 
     # Gestione NaN e stringhe vuote
     mask_na = s_out.isna() | (s_out.astype(str).str.strip() == "")
-    s_out = s_out.astype(str).str.strip().str.lower()
+    s_str = s_out.astype(str).str.strip().str.lower()
 
     true_set = TRUE_TOKENS
     false_set = FALSE_TOKENS
 
     # Inizializziamo il risultato con na_as
-    result = pd.Series(na_as, index=s_out.index)
+    result = pd.Series(na_as, index=s_out.index, dtype="boolean")
 
-    # True espliciti
-    result[s_out.isin(true_set)] = True
-    # False espliciti
-    result[s_out.isin(false_set)] = False
+    # True/False espliciti
+    result.loc[s_str.isin(true_set)]  = True
+    result.loc[s_str.isin(false_set)] = False
 
     # Numerici non zero = True
-    num_mask = s_out.str.replace('.', '', 1).str.isnumeric()
-    result[num_mask] = s_out[num_mask].astype(float) != 0
+    s_num = pd.to_numeric(s_str.str.replace(",", ".", regex=False), errors="coerce")
+    num_mask = s_num.notna()
+    result.loc[num_mask] = s_num.loc[num_mask].ne(0).astype("boolean")
 
-    # Applica na_as per i NaN originali o stringhe vuote
-    result[mask_na] = na_as
+    # Applica na_as per NaN/originali vuoti
+    if pd.isna(na_as):
+        result.loc[mask_na] = pd.NA
+    else:
+        result.loc[mask_na] = bool(na_as)
 
-    return result.astype(bool)
+    return result.astype("boolean")
 
 
 
@@ -226,8 +229,6 @@ def generic_transform(df, stats, mod_config):
     df = df[~mask_invalid_id].copy()
 
 
-
-
     # HANDLE HALO-LIKE (OUTCOME)
     if quality_methodology == "outcome":
         outcome_col = mod_config.get("outcome_column", None)
@@ -339,6 +340,7 @@ def generic_transform(df, stats, mod_config):
     df = df[final_cols]
 
 
+
     if needs_auditor:
         # per le label che hanno auditor_column_type = agreement/disagreement, devo popolare la rispettiva colonna rater secondo questa logica:
         # se la label è agreement e la risposta "boolish" dell'auditor è True, copiamo nella risposta del rater la risposta (stringa) dell'auditor, altrimenti NA
@@ -351,15 +353,16 @@ def generic_transform(df, stats, mod_config):
 
             col_type = v.get('auditor_column_type')
             if col_type in ["agreement", "disagreement"]:
-                empty_as = v.get("empty_as", False)
+                empty_as = v.get("empty_as", np.nan)
                 bool_mask = as_boolish_series(df[a_col], na_as=empty_as)
 
                 if col_type == "agreement":
-                    df[r_col] = df[a_col].where(bool_mask, np.nan)
+                    df[r_col] = df[a_col].where(bool_mask.eq(True), np.nan)
                 
                 elif col_type == "disagreement":
-                    df[r_col] = df[a_col].where(~bool_mask, np.nan)
-            
+                    df[r_col] = df[a_col].where(bool_mask.eq(True), np.nan)
+
+
 
             # outcome column
             out_col = f"o_{label_name}"
@@ -371,12 +374,13 @@ def generic_transform(df, stats, mod_config):
 
             elif col_type == "agreement":
                 # True dove la bool_mask è True, altrimenti False
-                df[out_col] = bool_mask.astype(bool)
+                df[out_col] = bool_mask  # dtype 'boolean' (True/False/<NA>)
 
             elif col_type == "disagreement":
                 # False dove la bool_mask è True, True altrimenti
-                df[out_col] = (~bool_mask).astype(bool)
+                df[out_col] = ~bool_mask
         
+
         # Reorder columns
         label_cols_ordered = []
         for label_name in label_flat_list:
@@ -401,17 +405,23 @@ def generic_transform(df, stats, mod_config):
                     parent_label=label,
                     rater_response=df[f"r_{label}"],
                     auditor_response=df[f"a_{label}"],
-                    is_correct=df[f"o_{label}"].astype(bool)
+                    is_correct=df[f"o_{label}"].astype("boolean")
                 )
                 for label in label_flat_list
             ],
             ignore_index=True
         )
 
+        # filter out is_correct = pd.NA
+        mask_remove_outcome_undefined = df_long["is_correct"].isna()
+        stats["skipped_outcome_undefined"] = int(mask_remove_outcome_undefined.sum())
+        df_long = df_long[~mask_remove_outcome_undefined]
+
         # Adding binary flags
         df_long["is_label_binary"] = False
         df_long["confusion_type"] = pd.NA
     
+        #df_long.to_csv("debug_long.csv", index=False)
 
     else:
         # No auditor, so we just pivot the labels
@@ -426,7 +436,6 @@ def generic_transform(df, stats, mod_config):
         )
 
     df = df_long
-
 
     return df
 
