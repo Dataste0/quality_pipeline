@@ -7,7 +7,6 @@ folderpath.env.local
 .VSCodeCounter/
 .conda/
 **/deprecated_*
-utils/
 
 **/__pycache__/
 *.py[cod]

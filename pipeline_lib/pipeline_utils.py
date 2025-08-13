@@ -25,7 +25,7 @@ def load_project_info(filepath, sheet_name="Project List", active_only=False):
     df_selected.columns = [col[1:] for col in df_selected.columns] # Removes prefix _
     df = df_selected.copy()
     
-    df = df[df["project_status"] != "Hidden"]  # Remove hidden projects
+    df = df[~df["project_status"].isin(["Hidden", "Deprecated"])] # Do not include Hidden or Deprecated projects
     
     if active_only:
         df = df[df["project_status"] == "Active"]  # Use only active projects

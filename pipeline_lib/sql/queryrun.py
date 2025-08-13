@@ -49,7 +49,8 @@ def olap_query_run(query_name, base, project_id, reporting_week, target):
     #week_str = reporting_week.strftime("%Y%m%d") if hasattr(reporting_week, "strftime") else str(reporting_week).replace("-", "")
     reporting_week_str = pd.to_datetime(reporting_week, errors="coerce").strftime("%Y-%m-%d")
     #print(f"\nParsed Report Week to ISO: {reporting_week_str}")
-    parquet_pattern = f"{project_id}/*/{project_id}_{reporting_week_str}_*_{base_code}_*.parquet"
+    #parquet_pattern = f"{project_id}/*/{project_id}_{reporting_week_str}_*_{base_code}_*.parquet"
+    parquet_pattern = f"{project_id}/{reporting_week_str}/{project_id}_{reporting_week_str}_*_{base_code}_*.parquet"
     input_path = os.path.join(DATA_PARQUET_BASE_PATH, parquet_pattern)
 
     #print(f"Parquet Input Path: {input_path}")

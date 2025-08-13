@@ -1,3 +1,4 @@
+-- Dedupe
 WITH alldata AS (
     SELECT 
         *, 
@@ -11,8 +12,7 @@ WITH alldata AS (
         WHERE parent_label IS NOT NULL 
           AND parent_label <> '' 
           AND parent_label <> 'pipeline_error'
-          AND project_id = {project_id}
-          AND reporting_week = {reporting_week}
+          AND auditor_id <> ''
     ) t
     WHERE row_num = 1
 )
@@ -30,5 +30,5 @@ SELECT
     confusion_type,
     is_correct
 FROM alldata
-WHERE auditor_id <> '' AND (NOT is_correct OR is_correct = 0)
+WHERE NOT is_correct OR is_correct = 0
 LIMIT 500

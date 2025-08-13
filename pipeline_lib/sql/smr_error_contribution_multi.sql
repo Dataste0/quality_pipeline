@@ -12,8 +12,7 @@ WITH alldata AS (
         WHERE parent_label IS NOT NULL 
           AND parent_label <> '' 
           AND parent_label <> 'pipeline_error'
-          AND project_id = {project_id}
-          AND reporting_week = {reporting_week}
+          
     ) t
     WHERE row_num = 1
 )
@@ -82,9 +81,6 @@ compare_response AS (
         M.parent_label, 
         M.rater_response,
         L.consensus_response,
-        M.is_label_binary as is_binary,
-        M.is_positive,
-        M.weight,
         -- Label is determined when consensus has been reached on the correct label (half of total reviewers + 1)
         CASE WHEN L.consensus_response IS NOT NULL THEN 1 ELSE 0 END AS is_label_determined,
         CASE
@@ -94,10 +90,11 @@ compare_response AS (
         END AS is_label_correct
         
     FROM alldata M
-    LEFT JOIN label_correct L USING (project_id, job_id, parent_label)
+    LEFT JOIN label_correct L 
+    USING (project_id, job_id, parent_label)
 )
 ,
--- compare all responses with consensus responses
+-- MULTIREVIEW FINAL TABLE
 multireview_jobs_labels AS (
     SELECT 
         week_ending, 
@@ -109,20 +106,10 @@ multireview_jobs_labels AS (
         rater_response, 
         consensus_response AS ground_truth_consensus, 
         is_label_determined AS has_ground_truth_consensus, 
-        is_label_correct,
-        is_binary,
-        is_positive,
-        CASE
-            WHEN is_binary AND is_positive AND is_label_correct THEN 'TP'
-            WHEN is_binary AND NOT is_positive AND is_label_correct THEN 'TN'
-            WHEN is_binary AND is_positive AND NOT is_label_correct THEN 'FP'
-            WHEN is_binary AND NOT is_positive AND NOT is_label_correct THEN 'FN'
-            ELSE NULL
-        END AS confusion_type
+        is_label_correct
     FROM compare_response
 )
 ,
-
 
 -- REPORT
 label_error_count AS (

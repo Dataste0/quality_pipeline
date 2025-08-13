@@ -11,8 +11,6 @@ WITH alldata AS (
         FROM {input_path}
         WHERE 1
         AND job_correct IS NOT NULL
-        AND project_id = {project_id}
-        AND reporting_week = {reporting_week}
     ) t
     WHERE row_num = 1
 )
@@ -41,8 +39,10 @@ rater_correct_jobs AS (
         workflow, 
         rater_id, 
         'default_label' as parent_label,
+        
         SUM(is_audited) as tot_labels,
         SUM(is_correct) as correct_labels,
+        
         0::INT AS tp_count,
         0::INT AS tn_count,
         0::INT AS fp_count,
@@ -68,18 +68,21 @@ rater_info AS (
         project_id,
         workflow,
         rater_id,
+        
         parent_label,
         tot_labels,
         correct_labels,
+        
         tp_count,
         tn_count,
         fp_count,
         fn_count,
-        target_goal,
+        
         rater_label_score,
         rater_label_f1score,
         rater_label_precision,
         rater_label_recall,
+        
         AVG(rater_label_score) OVER (PARTITION BY week_ending, project_id, workflow, rater_id) as rater_score,
         AVG(rater_label_f1score) OVER (PARTITION BY week_ending, project_id, workflow, rater_id) as rater_f1score,
         AVG(rater_label_precision) OVER (PARTITION BY week_ending, project_id, workflow, rater_id) as rater_precision,

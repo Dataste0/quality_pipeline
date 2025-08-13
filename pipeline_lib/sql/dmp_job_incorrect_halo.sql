@@ -6,12 +6,11 @@ WITH alldata AS (
     FROM (
         SELECT *, 
                ROW_NUMBER() OVER (
-                   PARTITION BY project_id, job_id, rater_id, auditor_id
+                   PARTITION BY project_id, job_id, rater_id, auditor_id, job_correct
                ) AS row_num
         FROM {input_path}
         WHERE 1
-        AND project_id = {project_id}
-        AND reporting_week = {reporting_week}
+        AND job_correct IS NOT NULL
     ) t
     WHERE row_num = 1
 )

@@ -40,6 +40,11 @@ def overwrite_olap(project, reporting_week):
         "total_count": "label_count"
     }
 
+    project_id = None
+    overall_filename = None
+    rater_filename = None
+    files_overall_pattern = None
+    files_rater_pattern = None
 
     if project == "CB":
         project_id = CBV2_PROJECT_ID
@@ -97,10 +102,10 @@ def overwrite_olap(project, reporting_week):
                 df = df[df["job_date"] == ordered_job_dates[0]].copy()
 
             # before filter out combined routing i want to create an overall column that contains the f1 score of overall routing in all rows
-            df['project_score'] = df['accuracy'].where(df['workflow'] == 'combined_routing')
-            df['project_f1score'] = df['f1_score'].where(df['workflow'] == 'combined_routing')
+            #df['project_score'] = df['accuracy'].where(df['workflow'] == 'combined_routing')
+            #df['project_f1score'] = df['f1_score'].where(df['workflow'] == 'combined_routing')
             # filter out "combined_routing" from workflow
-            df = df[df["workflow"] != "combined_routing"].copy()
+            #df = df[df["workflow"] != "combined_routing"].copy()
 
             # filter out parent_labels with "negative" in them
             df = df[~df["parent_label"].str.contains("negative", case=False, na=False)].copy()
@@ -121,7 +126,7 @@ def overwrite_olap(project, reporting_week):
                 
             df_overall["week_ending"] = reporting_week_str
             df_overall["project_id"] = project_id
-            df_overall.drop(columns=["job_date", "parent_label"], inplace=True)
+            df_overall.drop(columns=["job_date"], inplace=True)
 
             # se la colonna workflow contiene una stringa del tipo cb_exagg_*, sostituisco in cb_withhold_*
             df_overall["workflow"] = df_overall["workflow"].str.replace(r'^cb_exagg_', 'cb_withhold_', regex=True)
@@ -129,8 +134,28 @@ def overwrite_olap(project, reporting_week):
             # rimuovo suffisso _v3 dalla colonna workflow
             df_overall["workflow"] = df_overall["workflow"].str.replace(r'_v3$', '', regex=True)
 
+            #print(f"OLAP OVERALL DF 1: {df_overall.head(100)}\n")
+
+            df_overall.drop(columns=["parent_label"], inplace=True)
+
             df_overall = df_overall.groupby(["project_id", "week_ending", "workflow"]).mean().reset_index()
-            
+
+            score = df_overall.loc[df_overall['workflow'] == 'combined_routing', 'accuracy'].mean()
+            f1 = df_overall.loc[df_overall['workflow'] == 'combined_routing', 'f1_score'].mean()
+            prec = df_overall.loc[df_overall['workflow'] == 'combined_routing', 'precision'].mean()
+            recll = df_overall.loc[df_overall['workflow'] == 'combined_routing', 'recall'].mean()
+
+            #print(f"OLAP OVERALL DF 2: {df_overall.head(100)}\n")
+
+            df_overall['project_score'] = score
+            df_overall['project_f1score'] = f1
+            df_overall['project_precision'] = prec
+            df_overall['project_recall'] = recll
+
+            df_overall = df_overall[df_overall["workflow"] != "combined_routing"].copy()
+
+            #print(f"OLAP OVERALL DF 3: {df_overall.head(100)}\n")
+
             olap_dfs['overall'] = df_overall
 
 
@@ -174,8 +199,10 @@ def overwrite_olap(project, reporting_week):
 
             df_raters["week_ending"] = reporting_week_str
             df_raters["project_id"] = project_id
-                
-            df_raters["correct_label_count"] = df_raters["tp_count"] + df_raters["tn_count"]
+            
+            df_raters["tot_labels"] = df_raters["tp_count"] + df_raters["tn_count"] + df_raters["fp_count"] + df_raters["fn_count"]
+            df_raters["correct_labels"] = df_raters["tp_count"] + df_raters["tn_count"]
+
                 
             df_raters["workflow"] = df_raters["workflow"].str.replace(r'_v3$', '', regex=True)
 
@@ -199,34 +226,39 @@ def overwrite_olap(project, reporting_week):
         df_olap_workflow["workflow_f1score"] = df_olap_workflow["f1_score"]
         df_olap_workflow["workflow_precision"] = df_olap_workflow["precision"]
         df_olap_workflow["workflow_recall"] = df_olap_workflow["recall"]
+
+        df_olap_workflow["project_score"] = df_olap_workflow["project_score"]
+        df_olap_workflow["project_f1score"] = df_olap_workflow["project_f1score"]
+        df_olap_workflow["project_precision"] = df_olap_workflow["project_precision"]
+        df_olap_workflow["project_recall"] = df_olap_workflow["project_recall"]
         df_olap_workflow.drop(columns=["accuracy", "f1_score", "precision", "recall"], inplace=True)
 
         reordered_columns = [
             "project_id", "week_ending", "workflow", "rater_count", "auditor_count", "job_instances", "audited_instances",
-            "label_count", "correct_label_count", "tp_count", "tn_count", "fp_count", "fn_count", "target_goal",
-            "raters_above_target", "raters_above_target_f1", "workflow_score", "workflow_f1score", "workflow_precision",
-            "workflow_recall"
+            "target_goal", "raters_above_target", "raters_above_target_f1", 
+            "workflow_score", "workflow_f1score", "workflow_precision", "workflow_recall", 
+            "project_score", "project_f1score", "project_precision", "project_recall"
         ]
         df_olap_workflow = df_olap_workflow[reordered_columns]
-        df_olap_workflow.to_csv(olap_workflow_file, index=False, encoding='utf-8')
+        #print(f"OLAP WORKFLOW DF: {df_olap_workflow.head(100)}\n")
+        #df_olap_workflow.to_csv(olap_workflow_file, index=False, encoding='utf-8')
 
     df_raters = olap_dfs["raters"] if "raters" in olap_dfs else pd.DataFrame()
     if not df_raters.empty:
         # RATER: overwrite olap export Rater
         olap_rater_file = os.path.join(olap_path, f"{project_id}_{reporting_week_str}_audit_smr-rater-label.csv")
 
-        group_cols = ['week_ending', 'project_id', 'rater_id']
-        df_raters['rated_jobs']             = df_raters.groupby(group_cols)['label_count'].transform('max')
-        df_raters['r_overall_score']        = df_raters.groupby(group_cols)['accuracy'].transform('mean')
-        df_raters['r_overall_f1score']      = df_raters.groupby(group_cols)['f1_score'].transform('mean')
-        df_raters['r_overall_precision']    = df_raters.groupby(group_cols)['precision'].transform('mean')
-        df_raters['r_overall_recall']       = df_raters.groupby(group_cols)['recall'].transform('mean')
+        group_cols = ['week_ending', 'project_id', 'rater_id', 'parent_label']
+        df_raters['rater_score']        = df_raters.groupby(group_cols)['accuracy'].transform('mean')
+        df_raters['rater_f1score']      = df_raters.groupby(group_cols)['f1_score'].transform('mean')
+        df_raters['rater_precision']    = df_raters.groupby(group_cols)['precision'].transform('mean')
+        df_raters['rater_recall']       = df_raters.groupby(group_cols)['recall'].transform('mean')
 
         renamed_cols = {
-                'accuracy': 'r_label_score',
-                'f1_score': 'r_label_f1score',
-                'precision': 'r_label_precision',
-                'recall': 'r_label_recall'
+                'accuracy': 'rater_label_score',
+                'f1_score': 'rater_label_f1score',
+                'precision': 'rater_label_precision',
+                'recall': 'rater_label_recall'
         }
         df_raters.rename(columns=renamed_cols, inplace=True)
         # sort by rater_id, parent_label
@@ -234,13 +266,13 @@ def overwrite_olap(project, reporting_week):
         df_olap_raters = df_raters.copy()
 
         reordered_columns = [
-            "week_ending", "project_id", "workflow", "rater_id", "rated_jobs", "parent_label", "label_count",
-            "correct_label_count", "tp_count", "tn_count", "fp_count", "fn_count", "r_label_score", "r_label_f1score",
-            "r_label_precision", "r_label_recall", "r_overall_score", "r_overall_f1score", "r_overall_precision",
-            "r_overall_recall"
+            "week_ending", "project_id", "workflow", "rater_id", "parent_label", 
+            "tot_labels", "correct_labels", "tp_count", "tn_count", "fp_count", "fn_count", 
+            "rater_label_score", "rater_label_f1score", "rater_label_precision", "rater_label_recall", 
+            "rater_score", "rater_f1score", "rater_precision", "rater_recall"
         ]
         df_olap_raters = df_olap_raters[reordered_columns]
-        df_olap_raters.to_csv(olap_rater_file, index=False, encoding='utf-8')
+        #df_olap_raters.to_csv(olap_rater_file, index=False, encoding='utf-8')
 
     print(f"Overwritten smr-workflow and smr-rater-label for project {project} {project_id} - week {reporting_week_str}")
 
@@ -257,3 +289,5 @@ def overwrite_olap_all():
 
 
 overwrite_olap_all()
+
+#overwrite_olap("CB", "2025-08-08")

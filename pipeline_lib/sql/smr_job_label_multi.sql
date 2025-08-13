@@ -12,8 +12,7 @@ WITH alldata AS (
         WHERE parent_label IS NOT NULL 
           AND parent_label <> '' 
           AND parent_label <> 'pipeline_error'
-          AND project_id = {project_id}
-          AND reporting_week = {reporting_week}
+          
     ) t
     WHERE row_num = 1
 )
@@ -82,9 +81,6 @@ compare_response AS (
         M.parent_label, 
         M.rater_response,
         L.consensus_response,
-        M.is_label_binary as is_binary,
-        M.is_positive,
-        M.weight,
         -- Label is determined when consensus has been reached on the correct label (half of total reviewers + 1)
         CASE WHEN L.consensus_response IS NOT NULL THEN 1 ELSE 0 END AS is_label_determined,
         CASE
@@ -94,10 +90,11 @@ compare_response AS (
         END AS is_label_correct
         
     FROM alldata M
-    LEFT JOIN label_correct L USING (project_id, job_id, parent_label)
+    LEFT JOIN label_correct L 
+    USING (project_id, job_id, parent_label)
 )
 ,
--- compare all responses with consensus responses
+-- MULTIREVIEW FINAL TABLE
 multireview_jobs_labels AS (
     SELECT 
         week_ending, 
@@ -109,19 +106,11 @@ multireview_jobs_labels AS (
         rater_response, 
         consensus_response AS ground_truth_consensus, 
         is_label_determined AS has_ground_truth_consensus, 
-        is_label_correct,
-        is_binary,
-        is_positive,
-        CASE
-            WHEN is_binary AND is_positive AND is_label_correct THEN 'TP'
-            WHEN is_binary AND NOT is_positive AND is_label_correct THEN 'TN'
-            WHEN is_binary AND is_positive AND NOT is_label_correct THEN 'FP'
-            WHEN is_binary AND NOT is_positive AND NOT is_label_correct THEN 'FN'
-            ELSE NULL
-        END AS confusion_type
+        is_label_correct
     FROM compare_response
 )
 ,
+
 
 -- REPORT
 job_label_correctness AS (
@@ -135,10 +124,10 @@ job_label_correctness AS (
         SUM(CASE WHEN has_ground_truth_consensus = 1 AND is_label_correct = 1 THEN 1 ELSE 0 END) AS correct_rater_count,
         SUM(CASE WHEN has_ground_truth_consensus = 1 AND is_label_correct = 0 THEN 1 ELSE 0 END) AS incorrect_rater_count,
 
-        SUM(CASE WHEN confusion_type = 'TP' THEN 1 ELSE 0 END) AS tp_count,
-        SUM(CASE WHEN confusion_type = 'TN' THEN 1 ELSE 0 END) AS tn_count,
-        SUM(CASE WHEN confusion_type = 'FP' THEN 1 ELSE 0 END) AS fp_count,
-        SUM(CASE WHEN confusion_type = 'FN' THEN 1 ELSE 0 END) AS fn_count
+        0::INT AS tp_count,
+        0::INT AS tn_count,
+        0::INT AS fp_count,
+        0::INT AS fn_count
     FROM multireview_jobs_labels
     GROUP BY week_ending, project_id, workflow, job_id, parent_label
 )
@@ -168,13 +157,6 @@ job_label_score AS (
 job_score AS (
     SELECT
         *,
-        --SUM(rater_count) OVER (PARTITION BY week_ending, project_id, workflow, job_id) AS job_total_raters,
-        --SUM(correct_rater_count) OVER (PARTITION BY week_ending, project_id, workflow, job_id) AS job_correct_raters,
-        --SUM(incorrect_rater_count) OVER (PARTITION BY week_ending, project_id, workflow, job_id) AS job_incorrect_raters,
-        --SUM(tp_count) OVER (PARTITION BY week_ending, project_id, workflow, job_id) AS job_tp_count,
-        --SUM(tn_count) OVER (PARTITION BY week_ending, project_id, workflow, job_id) AS job_tn_count,
-        --SUM(fp_count) OVER (PARTITION BY week_ending, project_id, workflow, job_id) AS job_fp_count,
-        --SUM(fn_count) OVER (PARTITION BY week_ending, project_id, workflow, job_id) AS job_fn_count,
         AVG(job_label_score) OVER (PARTITION BY week_ending, project_id, workflow, job_id) AS job_score,
         AVG(job_label_f1score) OVER (PARTITION BY week_ending, project_id, workflow, job_id) AS job_f1score,
         AVG(job_label_precision) OVER (PARTITION BY week_ending, project_id, workflow, job_id) AS job_precision,

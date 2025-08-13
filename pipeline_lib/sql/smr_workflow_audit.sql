@@ -12,8 +12,7 @@ WITH alldata AS (
         WHERE parent_label IS NOT NULL 
           AND parent_label <> '' 
           AND parent_label <> 'pipeline_error'
-          AND project_id = {project_id}
-          AND reporting_week = {reporting_week}
+          AND auditor_id <> ''
     ) t
     WHERE row_num = 1
 )
@@ -27,7 +26,7 @@ auditor_count AS (
     GROUP BY project_id, week_ending, workflow
 ),
 
--- Jobs correct
+-- AUDITED JOBS TABLE
 rater_correct_jobs_labels AS (
     SELECT 
         week_ending, 
@@ -50,16 +49,21 @@ rater_correct_jobs_labels AS (
     WHERE auditor_id <> ''
     GROUP BY week_ending, project_id, workflow, rater_id, job_id
 ),
+
+
 rater_correct_jobs AS (
     SELECT 
         week_ending, 
         project_id, 
         workflow, 
         rater_id, 
+        
         SUM(is_rated) as rated_jobs, 
         SUM(is_audited) as audited_jobs,
+       
         SUM(correct_labels) as correct_labels, 
         SUM(tot_labels) as tot_labels,
+        
         SUM(tp_count) as tp_count,
         SUM(tn_count) as tn_count,
         SUM(fp_count) as fp_count,
@@ -91,16 +95,23 @@ workflow_score AS (
         week_ending, 
         project_id, 
         workflow, 
+        
         COUNT(rater_id)::INT as rater_count,
         SUM(rated_jobs)::INT as rated_jobs, 
         SUM(audited_jobs)::INT as audited_jobs,
+        
         MAX(target_goal)::FLOAT as target_goal,
         SUM(rater_is_above_target)::INT as raters_above_target,
         SUM(rater_is_above_target_f1)::INT as raters_above_target_f1,
-        AVG(rater_score)::FLOAT as workflow_score,
+
+        SUM(correct_labels) AS workflow_correct_labels,
+        SUM(tot_labels) AS workflow_tot_labels,
+        CASE WHEN SUM(tot_labels) = 0 THEN NULL ELSE SUM(correct_labels)/SUM(tot_labels)::FLOAT END as workflow_score,
+        
         AVG(rater_f1score)::FLOAT as workflow_f1score,
         AVG(rater_precision)::FLOAT as workflow_precision,
         AVG(rater_recall)::FLOAT as workflow_recall
+
     FROM raters_above_target
     GROUP BY week_ending, project_id, workflow
 )
@@ -111,17 +122,22 @@ workflow_info AS (
         week_ending,
         project_id,
         workflow,
+
         rater_count,
         auditor_count as auditor_count,
+        
         rated_jobs as job_instances,
         audited_jobs as audited_instances,
+        
         target_goal,
         raters_above_target,
         raters_above_target_f1,
+        
         workflow_score,
         workflow_f1score,
         workflow_precision,
         workflow_recall,
+        
         AVG(workflow_score) OVER (PARTITION BY week_ending, project_id) as project_score,
         AVG(workflow_f1score) OVER (PARTITION BY week_ending, project_id) as project_f1score,
         AVG(workflow_precision) OVER (PARTITION BY week_ending, project_id) as project_precision,

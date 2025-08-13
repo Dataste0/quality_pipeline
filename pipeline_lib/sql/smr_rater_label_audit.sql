@@ -12,15 +12,15 @@ WITH alldata AS (
         WHERE parent_label IS NOT NULL 
           AND parent_label <> '' 
           AND parent_label <> 'pipeline_error'
-          AND project_id = {project_id}
-          AND reporting_week = {reporting_week}
+          AND auditor_id <> ''
     ) t
     WHERE row_num = 1
 )
 ,
 
 
--- Jobs correct
+
+-- REPORT Job Labels List
 rater_correct_jobs_labels AS (
     SELECT 
         week_ending, 
@@ -28,14 +28,15 @@ rater_correct_jobs_labels AS (
         workflow, 
         rater_id, 
         parent_label,
+
         COUNT(job_id) as tot_labels,
         SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) as correct_labels,
+        
         SUM(CASE WHEN confusion_type = 'TP' THEN 1 ELSE 0 END) AS tp_count,
         SUM(CASE WHEN confusion_type = 'TN' THEN 1 ELSE 0 END) AS tn_count,
         SUM(CASE WHEN confusion_type = 'FP' THEN 1 ELSE 0 END) AS fp_count,
         SUM(CASE WHEN confusion_type = 'FN' THEN 1 ELSE 0 END) AS fn_count
     FROM alldata
-    WHERE auditor_id <> ''
     GROUP BY week_ending, project_id, workflow, rater_id, parent_label
 )
 ,
@@ -56,18 +57,21 @@ rater_info AS (
         project_id,
         workflow,
         rater_id,
+        
         parent_label,   
         tot_labels,
         correct_labels,
+        
         tp_count,
         tn_count,
         fp_count,
         fn_count,
-        target_goal,
+        
         rater_label_score,
         rater_label_f1score,
         rater_label_precision,
         rater_label_recall,
+        
         AVG(rater_label_score) OVER (PARTITION BY week_ending, project_id, workflow, rater_id) as rater_score,
         AVG(rater_label_f1score) OVER (PARTITION BY week_ending, project_id, workflow, rater_id) as rater_f1score,
         AVG(rater_label_precision) OVER (PARTITION BY week_ending, project_id, workflow, rater_id) as rater_precision,

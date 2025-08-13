@@ -1,3 +1,4 @@
+-- Dedupe
 WITH alldata AS (
     SELECT 
         *, 
@@ -11,8 +12,7 @@ WITH alldata AS (
         WHERE parent_label IS NOT NULL 
           AND parent_label <> '' 
           AND parent_label <> 'pipeline_error'
-          AND project_id = {project_id}
-          AND reporting_week = {reporting_week}
+          AND auditor_id <> ''
     ) t
     WHERE row_num = 1
 )
@@ -22,7 +22,7 @@ WITH alldata AS (
 label_error_count AS (
     SELECT week_ending, project_id, parent_label, rater_response, auditor_response as ground_truth, COUNT(*) AS error_count
     FROM alldata
-    WHERE auditor_id <> '' AND (NOT is_correct OR is_correct = 0)
+    WHERE NOT is_correct OR is_correct = 0
     GROUP BY week_ending, project_id, parent_label, rater_response, auditor_response
 ),
 

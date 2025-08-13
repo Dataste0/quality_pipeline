@@ -239,14 +239,17 @@ def generic_transform(df, stats, mod_config):
             return pd.DataFrame()
 
         if discard_if_empty:
-            df = df[df[outcome_col].notna() & (df[outcome_col].astype(str).str.strip() != "")].copy()
+            mask = df[outcome_col].notna() & (df[outcome_col].astype(str).str.strip() != "")
+            discarded_count = (~mask).sum()  # quante righe NON passano il filtro
+            stats["discarded_outcome_empty"] = int(discarded_count)
+            df = df[mask].copy()
         
         if positive_outcome_case_sensitive:
-            df["is_correct"] = df[outcome_col].astype(str).str.strip() == str(positive_outcome)
+            df["job_correct"] = df[outcome_col].astype(str).str.strip() == str(positive_outcome)
         else:
-            df["is_correct"] = df[outcome_col].astype(str).str.strip().str.lower() == str(positive_outcome).lower()
+            df["job_correct"] = df[outcome_col].astype(str).str.strip().str.lower() == str(positive_outcome).lower()
 
-        df = df[base_cols + ["is_correct"]]
+        df = df[base_cols + ["job_correct"]]
 
         return df
 
