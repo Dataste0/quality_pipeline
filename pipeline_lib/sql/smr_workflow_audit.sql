@@ -37,6 +37,10 @@ rater_correct_jobs_labels AS (
         
         1::INT as is_rated,
         1::INT as is_audited,
+        CASE WHEN
+            ( SUM(CASE WHEN confusion_type = 'TP' THEN 1 ELSE 0 END) +
+              SUM(CASE WHEN confusion_type = 'FP' THEN 1 ELSE 0 END) +
+              SUM(CASE WHEN confusion_type = 'FN' THEN 1 ELSE 0 END) ) > 0 THEN 1 ELSE 0 END as is_audited_f1,
 
         COUNT(*) AS tot_labels,
         SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) as correct_labels,
@@ -60,6 +64,7 @@ rater_correct_jobs AS (
         
         SUM(is_rated) as rated_jobs, 
         SUM(is_audited) as audited_jobs,
+        SUM(is_audited_f1) as audited_jobs_f1,
        
         SUM(correct_labels) as correct_labels, 
         SUM(tot_labels) as tot_labels,
@@ -99,6 +104,7 @@ workflow_score AS (
         COUNT(rater_id)::INT as rater_count,
         SUM(rated_jobs)::INT as rated_jobs, 
         SUM(audited_jobs)::INT as audited_jobs,
+        SUM(audited_jobs_f1)::INT as audited_jobs_f1,
         
         MAX(target_goal)::FLOAT as target_goal,
         SUM(rater_is_above_target)::INT as raters_above_target,
@@ -128,6 +134,7 @@ workflow_info AS (
         
         rated_jobs as job_instances,
         audited_jobs as audited_instances,
+        audited_jobs_f1 as audited_instances_f1,
         
         target_goal,
         raters_above_target,

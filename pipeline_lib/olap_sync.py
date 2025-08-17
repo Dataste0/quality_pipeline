@@ -5,6 +5,7 @@ import pipeline_lib.config as cfg
 import pipeline_lib.pipeline_utils as pu
 from pipeline_lib.queues import TransformationQueueManager
 from pipeline_lib.sql.queryrun import olap_query_run
+from pipeline_lib.baits_exception import overwrite_olap
 
 OLAP_BASE_FOLDER = cfg.OLAP_EXPORT_DIR_PATH
 
@@ -37,7 +38,12 @@ def generate_olap_reports(project_id, project_base, reporting_week, target):
         report_path = os.path.join(olap_folder, report_name)
         pu.save_df_to_filepath(report_df, report_path)
     
+
     # Override for CB and EB
+    CBV2_PROJECT_ID = "a01Hs00001ocUa0IAE"
+    EB_PROJECT_ID = "a01Hs00001ocUZgIAM"
+    if project_id == CBV2_PROJECT_ID or project_id == EB_PROJECT_ID:
+        overwrite_olap(project_id, reporting_week_str)
 
     return True
 

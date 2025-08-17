@@ -18,12 +18,9 @@ project_list_df = pu.load_project_info(PROJECT_MASTERFILE, active_only=False)
 
 
 CBV2_PROJECT_ID = "a01Hs00001ocUa0IAE"
-CB_OVERALL_FILENAME = "cvs_*_metrics_overview_*.csv"
-CB_RATER_FILENAME = "cvs_*_rater_level_metrics_*.csv"
-
 EB_PROJECT_ID = "a01Hs00001ocUZgIAM"
-EB_OVERALL_FILENAME = "cvs_*_metrics_overview_*.csv"
-EB_RATER_FILENAME = "cvs_*_rater_level_metrics_*.csv"
+OVERALL_FILENAME = "cvs_*_metrics_overview_*.csv"
+RATER_FILENAME = "cvs_*_rater_level_metrics_*.csv"
 
 rename_mapping = {
         "sample_ds": "job_date",
@@ -82,31 +79,17 @@ def prepare_rater_df(df):
 
 
 
-def overwrite_olap(project, reporting_week):
+def overwrite_olap(project_id, reporting_week):
     reporting_week = pd.to_datetime(reporting_week, errors='coerce')
 
-    project_id = None
-    overall_filename = None
-    rater_filename = None
-    files_overall_pattern = None
-    files_rater_pattern = None
-
-    if project == "CB":
-        project_id = CBV2_PROJECT_ID
-        overall_filename = CB_OVERALL_FILENAME
-        rater_filename = CB_RATER_FILENAME
-        files_overall_pattern = f"{overall_filename.replace('*', '.*')}"
-        files_rater_pattern = f"{rater_filename.replace('*', '.*')}"
-    
-    elif project == "EB":
-        project_id = EB_PROJECT_ID
-        overall_filename = EB_OVERALL_FILENAME
-        rater_filename = EB_RATER_FILENAME
+    if project_id == CBV2_PROJECT_ID or project_id == EB_PROJECT_ID:
+        overall_filename = OVERALL_FILENAME
+        rater_filename = RATER_FILENAME
         files_overall_pattern = f"{overall_filename.replace('*', '.*')}"
         files_rater_pattern = f"{rater_filename.replace('*', '.*')}"
     
     else:
-        raise ValueError(f"Unknown project: {project}")
+        raise ValueError(f"Unknown project: {project_id}")
 
     
     # Get the raw data folder for the project
@@ -185,7 +168,7 @@ def overwrite_olap(project, reporting_week):
     if dfs_raters:
         df_raters = pd.concat(dfs_raters, ignore_index=True)
             
-        if project == "CB":
+        if project_id == CBV2_PROJECT_ID:
             df_raters['parent_label'] = df_raters['parent_label'].replace(to_replace=r'.*exagg.*', value='exaggeration', regex=True)
             df_raters['parent_label'] = df_raters['parent_label'].replace(to_replace=r'.*withhold.*', value='withhold', regex=True)
             df_raters["workflow"] = df_raters["workflow"].str.replace(r'^cb_exagg_', 'cb_withhold_', regex=True)
@@ -195,6 +178,11 @@ def overwrite_olap(project, reporting_week):
             
         df_raters["tot_labels"] = df_raters["tp_count"] + df_raters["tn_count"] + df_raters["fp_count"] + df_raters["fn_count"]
         df_raters["correct_labels"] = df_raters["tp_count"] + df_raters["tn_count"]
+
+        # Filter out contributors with TPs+FPs+FNs = 0
+        #df_raters = df_raters.groupby(['rater_id', 'workflow', 'job_date']).filter(
+        #    lambda g: (g[['tp_count', 'fp_count', 'fn_count']].sum().sum()) != 0
+        #)
 
                 
         df_raters["workflow"] = df_raters["workflow"].str.replace(r'_v3$', '', regex=True)
@@ -267,7 +255,7 @@ def overwrite_olap(project, reporting_week):
         df_olap_raters = df_olap_raters[reordered_columns]
         df_olap_raters.to_csv(olap_rater_file, index=False, encoding='utf-8')
 
-    print(f"Overwritten smr-workflow and smr-rater-label for project {project} {project_id} - week {reporting_week_str}")
+    print(f"Overwritten smr-workflow and smr-rater-label for project {project_id} - week {reporting_week_str}")
 
     return True
 
@@ -276,11 +264,10 @@ def overwrite_olap(project, reporting_week):
 def overwrite_olap_all():
     we_dates = pu.generate_we_dates("2025-01-01")
     for week in we_dates:
-        for project in ["CB", "EB"]:
-            print(f"Overwriting OLAP for project {project} - week {week}")
-            overwrite_olap(project, week)
+        for project_id in [CBV2_PROJECT_ID, EB_PROJECT_ID]:
+            print(f"Overwriting OLAP for project {project_id} - week {week}")
+            overwrite_olap(project_id, week)
 
 
-overwrite_olap_all()
 
 #overwrite_olap("CB", "2025-08-08")

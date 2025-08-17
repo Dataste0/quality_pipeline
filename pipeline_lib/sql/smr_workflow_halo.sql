@@ -109,6 +109,7 @@ workflow_info AS (
         
         rated_jobs as job_instances,
         audited_jobs as audited_instances,
+        0::INT as audited_instances_f1,
         
         target_goal,
         raters_above_target,

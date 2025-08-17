@@ -94,28 +94,32 @@ def scan_rawdata_week_folder(project_metadata, data_week, raw_data_root, last_sn
             
             project_config_regex = project_config.get('files_filter_regex', None)
             project_config_pattern = project_config.get('files_filter_pattern', None)
-            if project_config_regex is None:
-                continue
+            if not project_config:
+                logger.warning(f"No project config found for {project_id} ({project_name}) {folder_name}")
+                dataset_format = "invalid:no_config"
+            else:
+                if project_config_regex is None:
+                    continue
                 
-            if project_config_regex.match(f):
-                regex_matched = True
-                    
-                # Check dataset type
-                dataset_type = project_config.get("dataset_type", None)
-                if dataset_type is not None:
-                    # Perform dataset type specific checks
-                    dataset_match = pu.check_dataset_type(full_path, dataset_type)
-                    #print(f"Returned dataset_match: {dataset_match}")
-                    if dataset_match:
-                        dataset_format = dataset_type
+                if project_config_regex.match(f):
+                    regex_matched = True
+                        
+                    # Check dataset type
+                    dataset_type = project_config.get("dataset_type", None)
+                    if dataset_type is not None:
+                        # Perform dataset type specific checks
+                        dataset_match = pu.check_dataset_type(full_path, dataset_type)
+                        #print(f"Returned dataset_match: {dataset_match}")
+                        if dataset_match:
+                            dataset_format = dataset_type
+                        else:
+                            dataset_format = f"invalid:{dataset_type}"
                     else:
-                        dataset_format = f"invalid:{dataset_type}"
-                else:
-                    dataset_format = f"invalid:not_declared"
+                        dataset_format = f"invalid:not_declared"
 
-                file_hash = pu.hash_file(full_path)
+                    file_hash = pu.hash_file(full_path)
 
-            #print(f"File {f} - Regex match: {regex_matched} - Format OK: {format_ok}")
+                #print(f"File {f} - Regex match: {regex_matched} - Format OK: {format_ok}")
                          
             file_existing_list.append({
                 "filename": f,
@@ -176,9 +180,9 @@ def scan_rawdata_project_folder(project_metadata, raw_data_root, last_snapshot, 
             print(f"Error: No project_config found for ACTIVE project {project_id} ({project_name}).")
             raise
         else:
-            logger.warning(f"No project_config found for {project_id} ({project_name}). Skipping scan.")
-            print(f"WARNING: No project_config found for {project_id} ({project_name}). Skipping scan.")
-            return []
+            logger.warning(f"No project_config found for {project_id} ({project_name}).")
+            print(f"WARNING: No project_config found for {project_id} ({project_name}).")
+            #return []
     
     # ---- Pre-compile filters per project_config item
     file_pattern_dict = project_config.get("files_filter", {})
