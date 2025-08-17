@@ -426,7 +426,7 @@ def compare_files_list(prev, curr):
     prev_hashes = set(f["hash"] for f in prev_files)
     for f in curr_files:
         if f["hash"] not in prev_hashes:
-            logger.debug(f"Hash is different: {prev_files} - {curr_files}")
+            logger.debug(f"Hash is different for file: {f} hash:{f['hash']} - not in prev hashes:{prev_hashes}")
             #print(f"[DEBUG] {prev_files} VS {curr_files}")
             new_files.append(f)
     return new_files
