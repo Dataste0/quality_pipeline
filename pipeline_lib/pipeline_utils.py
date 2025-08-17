@@ -515,6 +515,14 @@ def hash_file(file_path):
     mtime = int(os.path.getmtime(file_path))
     hasher.update(str(mtime).encode('utf-8'))
 
+
+    # Normalizing mtime to hour (to avoid cross-platform discrepancies)
+    dt = datetime.fromtimestamp(mtime)
+    mtime_hour = dt.replace(minute=0, second=0, microsecond=0).timestamp()
+
+    print(f"\n[HASHDEBUG] Hashing file: {file_path} - Size: {size} bytes, MTime: {mtime}, MtimeHr: {mtime_hour}")
+
+
     # File chunks
     #with open(file_path, 'rb') as f:
     #    while chunk := f.read(8192):
