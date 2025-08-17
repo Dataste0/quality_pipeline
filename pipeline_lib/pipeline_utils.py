@@ -512,16 +512,8 @@ def hash_file(file_path):
     hasher.update(str(size).encode('utf-8'))
 
     # File modification time (mtime)
-    mtime = int(os.path.getmtime(file_path))
-    hasher.update(str(mtime).encode('utf-8'))
-
-
-    # Normalizing mtime to hour (to avoid cross-platform discrepancies)
-    dt = datetime.fromtimestamp(mtime)
-    mtime_hour = dt.replace(minute=0, second=0, microsecond=0).timestamp()
-
-    print(f"\n[HASHDEBUG] Hashing file: {file_path} - Size: {size} bytes, MTime: {mtime}, MtimeHr: {mtime_hour}")
-
+    #mtime = int(os.path.getmtime(file_path))
+    #hasher.update(str(mtime).encode('utf-8'))
 
     # File chunks
     #with open(file_path, 'rb') as f:
@@ -529,26 +521,6 @@ def hash_file(file_path):
     #        hasher.update(chunk)
         
     return hasher.hexdigest()
-
-
-def hash_dir(folder_path, file_info_list=None):
-    hasher = hashlib.md5()
-
-    folder_name = os.path.basename(folder_path)
-    parent_name = os.path.basename(os.path.dirname(folder_path))
-
-    hasher.update(folder_name.encode("utf-8", errors="ignore"))
-    hasher.update(parent_name.encode("utf-8", errors="ignore"))
-
-    if file_info_list:
-        hasher.update(str(len(file_info_list)).encode("utf-8"))
-
-        for info in sorted(file_info_list, key=lambda x: x["filename"]):
-            hasher.update(info["filename"].encode("utf-8", errors="ignore"))
-            hasher.update(info["hash"].encode("utf-8", errors="ignore"))
-
-    return hasher.hexdigest()
-
 
 
 def hash_directory_fast(folder_path, is_active):
@@ -571,13 +543,13 @@ def hash_directory_fast(folder_path, is_active):
 
             try:
                 size = os.path.getsize(full_path)
-                mtime = os.path.getmtime(full_path)
                 
-                # Normalizing mtime to hour (to avoid cross-platform discrepancies)
-                dt = datetime.fromtimestamp(mtime)
-                mtime_hour = dt.replace(minute=0, second=0, microsecond=0).timestamp()
-                
-                entry = f"{relative_path}:{size}:{int(mtime_hour)}"
+                #mtime = os.path.getmtime(full_path)
+                #dt = datetime.fromtimestamp(mtime)
+                #mtime_hour = dt.replace(minute=0, second=0, microsecond=0).timestamp()
+                #entry = f"{relative_path}:{size}:{int(mtime_hour)}"
+
+                entry = f"{relative_path}:{size}"
                 file_info.append(entry)
             except OSError:
                 continue  # skip inaccessible files
@@ -587,6 +559,10 @@ def hash_directory_fast(folder_path, is_active):
 
     return hasher.hexdigest()
 
+
+
+
+################## NOT USED
 
 """
 def hash_directory_metadata(folder_path, project_is_active):
@@ -624,10 +600,32 @@ def hash_directory_metadata(folder_path, project_is_active):
         logger.error(f"Failed to hash directory metadata for {folder_path}: {e}")
         return "error_hash"
 """
-################## NOT USED
+
+
+"""
+def hash_dir(folder_path, file_info_list=None):
+    hasher = hashlib.md5()
+
+    folder_name = os.path.basename(folder_path)
+    parent_name = os.path.basename(os.path.dirname(folder_path))
+
+    hasher.update(folder_name.encode("utf-8", errors="ignore"))
+    hasher.update(parent_name.encode("utf-8", errors="ignore"))
+
+    if file_info_list:
+        hasher.update(str(len(file_info_list)).encode("utf-8"))
+
+        for info in sorted(file_info_list, key=lambda x: x["filename"]):
+            hasher.update(info["filename"].encode("utf-8", errors="ignore"))
+            hasher.update(info["hash"].encode("utf-8", errors="ignore"))
+
+    return hasher.hexdigest()
+"""
+
+
 
 # Reporting
-
+"""
 def generate_rawdata_report(current_snapshot_df, project_df, savepath):
     
     summary_df = current_snapshot_df[
@@ -688,8 +686,10 @@ def generate_rawdata_report(current_snapshot_df, project_df, savepath):
     summary_merged["current_week"] = current_weekending
 
     summary_merged.to_csv(savepath, index=False)
+"""
 
 
+"""
 def extract_zip_file(folder_path):
     logging.debug(f"Extracting zip file: {folder_path}")
     for filename in os.listdir(folder_path):
@@ -703,7 +703,8 @@ def extract_zip_file(folder_path):
                 zip_ref.extractall(path=folder_path)
 
             os.remove(zip_path)
-            print(f"✅ Extracted and removed: {filename}")
+            print(f"Extracted and removed: {filename}")
 
         except Exception as e:
-            print(f"❌ Failed to extract {filename}: {e}")
+            print(f"Failed to extract {filename}: {e}")
+"""
