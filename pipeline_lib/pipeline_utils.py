@@ -563,7 +563,12 @@ def hash_directory_fast(folder_path, is_active):
             try:
                 size = os.path.getsize(full_path)
                 mtime = os.path.getmtime(full_path)
-                entry = f"{relative_path}:{size}:{mtime}"
+                
+                # Normalizing mtime to hour (to avoid cross-platform discrepancies)
+                dt = datetime.fromtimestamp(mtime)
+                mtime_hour = dt.replace(minute=0, second=0, microsecond=0).timestamp()
+                
+                entry = f"{relative_path}:{size}:{int(mtime_hour)}"
                 file_info.append(entry)
             except OSError:
                 continue  # skip inaccessible files
