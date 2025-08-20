@@ -1,4 +1,6 @@
+from duckdb import df
 import pandas as pd
+from pandas.errors import ParserError
 import numpy as np
 import csv
 import json
@@ -278,6 +280,17 @@ def generate_transformed_filename(project_id, data_week, orig_filename, content_
 # FILE HANDLING
 
 def load_df_from_filepath(file_path):
+    SUSPICIOUS_PATTERNS = [
+        #r'Object flaw,\s*artifacts',
+        r'\\"',
+        r'\\,"',
+        r'//',
+    ]
+    def _header_looks_suspicious(df: pd.DataFrame) -> bool:
+        cols = ",".join(map(str, df.columns))
+        return any(re.search(p, cols) for p in SUSPICIOUS_PATTERNS)
+    
+    
     logger.debug(f"Loading dataframe from path: {file_path}")
     if not os.path.exists(file_path):
         logger.error(f"Unable to load dataframe from filepath. File not found {file_path}")
@@ -286,26 +299,54 @@ def load_df_from_filepath(file_path):
     _, ext = os.path.splitext(file_path.lower())
 
     try:
-        #if ext == ".csv":
-        #    logger.debug(f"Loading CSV file")
-        #    return pd.read_csv(file_path, dtype=str, keep_default_na=False)
         if ext == ".csv":
-            logger.debug("Loading CSV file with UTF-8 encoding")
-            try:
-                return pd.read_csv(file_path, dtype=str, keep_default_na=False, encoding='utf-8')
-            except UnicodeDecodeError as e:
-                logger.warning(f"UTF-8 decoding failed: {e}. Retrying with latin1 encoding.")
-                return pd.read_csv(file_path, dtype=str, keep_default_na=False, encoding='latin1')
-            
-        elif ext in [".xlsx", ".xls"]:
-            logger.debug(f"Loading Excel file. Sheet[0]")
+            encodings = ("utf-8", "latin1")
+            last_err = None
+
+            # 1) Prova strict
+            for enc in encodings:
+                try:
+                    logger.debug(f"CSV strict read (engine=c, {enc})")
+                    df = pd.read_csv(
+                        file_path, dtype=str, keep_default_na=False,
+                        encoding=enc, engine="c", quotechar='"', on_bad_lines="error"
+                    )
+                    if _header_looks_suspicious(df):
+                        logger.warning("Suspicious header detected → retrying permissive parser")
+                        raise ParserError("Suspicious header")
+                    return df
+                except (UnicodeDecodeError, ParserError) as e:
+                    logger.info(f"Strict read failed/suspicious ({enc}): {e}")
+                    last_err = e
+
+            # 2) Fallback permissive
+            for enc in encodings:
+                try:
+                    logger.debug(f"CSV permissive read (engine=python, escape='\\\\', {enc})")
+                    return pd.read_csv(
+                        file_path, dtype=str, keep_default_na=False,
+                        encoding=enc, engine="python", quotechar='"',
+                        escapechar='\\', on_bad_lines="error"
+                    )
+                except (UnicodeDecodeError, ParserError) as e:
+                    logger.info(f"Permissive read failed with {enc}: {e}")
+                    last_err = e
+
+            raise ValueError(f"Unable to parse CSV (strict/permissive failed): {last_err}")
+
+        elif ext in (".xlsx", ".xls"):
+            logger.debug("Loading Excel file (Sheet[0])")
             return pd.read_excel(file_path, sheet_name=0, engine='openpyxl', dtype=str, keep_default_na=False)
+
         else:
             logger.error(f"Unsupported file type: {ext}")
             raise ValueError(f"Unsupported file type: {ext}")
+
     except Exception as e:
         logger.error(f"Failed to load file {file_path}: {e}")
         raise ValueError(f"Failed to load file {file_path}: {e}")
+    
+
 
 def save_df_to_filepath(df, output_path):
     logger.debug(f"Saving dataframe to path: {output_path}")
