@@ -3,6 +3,7 @@ import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+import pandas as pd
 import pipeline_lib.config as cfg
 import pipeline_lib.pipeline_utils as pu
 from pipeline_lib.project_transformers.dispatcher import process_dataframe
@@ -343,8 +344,33 @@ METADATA_CRAWLING = {
     }
 }
 
-df = pu.load_df_from_filepath(RAW_CRAWLING)
-project_metadata = METADATA_CRAWLING
+
+RAW_ADAP = os.path.join(
+    cfg.RAWDATA_ROOT_PATH,
+    "a01Hs00001ocUa8IAE_IG Off-Topic Relevance Ads PAE", "WE 2025.07.04",
+    "Conness ADAP Results Prod WE07.04.2025_Full Report.xlsx"
+)
+
+METADATA_ADAP = {
+  "project_id": "a01Hs00001ocUa8IAE",
+  "project_name": "test",
+  "project_config": {
+          "files_filter": {
+              "begins_with": "test",
+              "contains": [],
+              "ends_with": ".csv"
+          },
+          "dataset_type": "ADAP",
+          "module": "ADHOC",
+          "module_config": {
+          }      
+    }
+}
+
+df = pu.load_df_from_filepath(RAW_ADAP)
+project_metadata = METADATA_ADAP
+print(f"pandas version: {pd.__version__}")
+
 print(f"\nMetadata {type(project_metadata)}\n{project_metadata}\n")
 #project_metadata["project_config"]["module_config"]["reporting_week"] = "1985-01-14"
 df_out, stats = process_dataframe(df, project_metadata)

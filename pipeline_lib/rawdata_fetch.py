@@ -94,6 +94,9 @@ def scan_rawdata_week_folder(project_metadata, data_week, raw_data_root, last_sn
             
             project_config_regex = project_config.get('files_filter_regex', None)
             project_config_pattern = project_config.get('files_filter_pattern', None)
+            #if project_id == "a01Hs00001ocUa8IAE":
+            #    print(f"DEBUG PROJECT CONFIG: {project_config}")
+            
             if not project_config:
                 logger.warning(f"No project config found for {project_id} ({project_name}) {folder_name}")
                 dataset_format = "invalid:no_config"
@@ -102,13 +105,19 @@ def scan_rawdata_week_folder(project_metadata, data_week, raw_data_root, last_sn
                     continue
                 
                 if project_config_regex.match(f):
+                    #if project_id == "a01Hs00001ocUa8IAE":
+                    #    print(f"DEBUG FILE MATCH")
                     regex_matched = True
                         
                     # Check dataset type
                     dataset_type = project_config.get("dataset_type", None)
+                    #if project_id == "a01Hs00001ocUa8IAE":
+                    #    print(f"Dataset type is: {dataset_type}")
                     if dataset_type is not None:
                         # Perform dataset type specific checks
                         dataset_match = pu.check_dataset_type(full_path, dataset_type)
+                        #if project_id == "a01Hs00001ocUa8IAE":
+                        #    print(f"Returned dataset_match: {dataset_match}")
                         #print(f"Returned dataset_match: {dataset_match}")
                         if dataset_match:
                             dataset_format = dataset_type
@@ -116,6 +125,7 @@ def scan_rawdata_week_folder(project_metadata, data_week, raw_data_root, last_sn
                             dataset_format = f"invalid:{dataset_type}"
                     else:
                         dataset_format = f"invalid:not_declared"
+                        #print(f"[DEBUG] Dataset type Not declared. \nDUMP of PROJECT CONFIG: {project_config}")
 
                     file_hash = pu.hash_file(full_path)
 

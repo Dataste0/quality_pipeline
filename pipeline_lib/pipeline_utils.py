@@ -494,6 +494,10 @@ def check_dataset_type(file_path, dataset_type):
         halo_required_cols = ["SRT Annotator ID", "Vendor Auditor ID", "SRT Job ID", "Time (PT)", "Vendor Tag"]
         return True if set(halo_required_cols).issubset(header) else False
     
+    elif dataset_type == "ADAP":
+        adap_required_cols = ["_unit_id", "_created_at", "_worker_id", "_tainted", "_channel"]
+        return True if set(adap_required_cols).issubset(header) else False
+    
     elif dataset_type == "UQD":
         uqd_required_cols = ["actor_id", "quality_actor_id", "job_id", "review_ds", "queue_name", "decision_data", "quality_decision_data", "extracted_label"]
         return True if set(uqd_required_cols).issubset(header) else False
