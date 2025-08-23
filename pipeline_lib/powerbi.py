@@ -11,6 +11,8 @@ PAYLOAD = {"note": "refresh after pipeline"}
 
 def powerbi_refresh():
     logger.info(f"Power BI Refresh Phase Started")
+    print("[INFO] Power BI Refresh Phase Started")
+    
     try:
         r = requests.post(PBI_URL, json=PAYLOAD, timeout=30)
         r.raise_for_status()
@@ -26,4 +28,5 @@ def powerbi_refresh():
         return False
 
     logger.info(f"Power BI Refresh Phase Ended")
+    print("[INFO] Power BI Refresh Phase Ended")
     return True
