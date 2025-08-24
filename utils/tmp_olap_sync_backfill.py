@@ -26,8 +26,10 @@ def generate_olap_reports(project_id, project_base, reporting_week, target):
     transformed_folder = os.path.join(TRANSFORMED_BASE_FOLDER, project_id, reporting_week_str)
     if not os.path.exists(transformed_folder):
         return True
+    
+    os.makedirs(olap_folder, exist_ok=True)
 
-    for query_name in ["smr-workflow", "smr-rater-label", "smr-job-label", "smr-error-contribution", "dmp-job-incorrect"]:
+    for query_name in ["smr-workflow"]:
         report_name = project_id + "_" + reporting_week_str + "_" + project_base + "_" + query_name + ".csv"
         
         report_df = olap_query_run(query_name, project_base, project_id, reporting_week, target)
@@ -41,9 +43,10 @@ def generate_olap_reports(project_id, project_base, reporting_week, target):
 
 
 
-def olap_backfill_rubric():
+def olap_backfill_audit():
 
-    df = project_list_df[(project_list_df['project_base'] == 'rubric') & (project_list_df['project_status'].str.lower() == 'active')]
+    #df = project_list_df[(project_list_df['project_base'] == 'audit') & (project_list_df['project_status'].str.lower() == 'active')]
+    df = project_list_df[(project_list_df['project_status'].str.lower() == 'active')]
     
     for _,row in df.iterrows():
         project_id = row['project_id']
@@ -63,4 +66,4 @@ def olap_backfill_rubric():
             else:
                 print(f"{project_id} - {reporting_week_str} - OK")
 
-olap_backfill_rubric()
+olap_backfill_audit()

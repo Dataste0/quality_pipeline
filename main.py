@@ -1,5 +1,4 @@
 import argparse
-
 from pipeline_lib.logging_config import setup_logging
 from pipeline_lib.rawdata_fetch import generate_rawdata_snapshot, compare_rawdata_snapshots
 from pipeline_lib.transform_rawdata import transform_enqueued_items
