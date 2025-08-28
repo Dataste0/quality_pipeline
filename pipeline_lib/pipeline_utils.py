@@ -8,7 +8,7 @@ import os
 import ast
 import hashlib
 from datetime import datetime, timedelta
-from config import DATASET_HEADER
+from pipeline_lib.config import DATASET_HEADER
 
 # --- Logger
 import logging
