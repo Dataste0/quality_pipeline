@@ -1,4 +1,3 @@
-from duckdb import df
 import pandas as pd
 from pandas.errors import ParserError
 import numpy as np
@@ -8,8 +7,8 @@ import re
 import os
 import ast
 import hashlib
-import zipfile
 from datetime import datetime, timedelta
+from config import DATASET_HEADER
 
 # --- Logger
 import logging
@@ -475,9 +474,11 @@ def compare_files_list(prev, curr):
 
 
 # DATASET TYPE UTILS
-def check_dataset_type(file_path, dataset_type):
+def get_dataset_type(file_path):
+    dataset_type = DATASET_HEADER
+
     if not os.path.exists(file_path):
-        logger.error(f"File not found: {file_path}")
+        #logger.error(f"File not found: {file_path}")
         return None
 
     try:
@@ -486,39 +487,25 @@ def check_dataset_type(file_path, dataset_type):
         elif file_path.lower().endswith((".xls", ".xlsx")):
             df = pd.read_excel(file_path, nrows=0, dtype=str)
     except Exception as e:
-        logger.error(f"Error reading file {file_path}: {e}")
+        #logger.error(f"Error reading file {file_path}: {e}")
         return None
 
     header = df.columns.str.strip().tolist()
-    if dataset_type == "HALO":
-        halo_required_cols = ["SRT Annotator ID", "Vendor Auditor ID", "SRT Job ID", "Time (PT)", "Vendor Tag"]
-        return True if set(halo_required_cols).issubset(header) else False
-    
-    elif dataset_type == "ADAP":
-        adap_required_cols = ["_unit_id", "_created_at", "_worker_id", "_tainted", "_channel"]
-        return True if set(adap_required_cols).issubset(header) else False
-    
-    elif dataset_type == "UQD":
-        uqd_required_cols = ["actor_id", "quality_actor_id", "job_id", "review_ds", "queue_name", "decision_data", "quality_decision_data", "extracted_label"]
-        return True if set(uqd_required_cols).issubset(header) else False
-    
-    elif dataset_type == "CVS":
-        cvs_required_cols = ["sample_ds", "entity_id", "rater_id", "routing_name", "rater_decision_data", "auditor_decision_data", "confusion_type", "config"]
-        return True if set(cvs_required_cols).issubset(header) else False
-    
-    elif dataset_type == "UQD-LIKE":
-        uqd_like_required_cols = ["actor_id", "decision_data", "decision_id", "job_final_derived_state", "job_id", "last_review_ds", "queue_name"]
-        return True if set(uqd_like_required_cols).issubset(header) else False
 
-    elif dataset_type == "HALO-LIKE":
-        halo_like_required_cols = ["Annotator ID", "Annotation Date And Time", "Annotation Job ID", "Annotation AHT s", "Audit Date And Time", "Is Job Successful?"]
-        return True if set(halo_like_required_cols).issubset(header) else False
-    
-    elif dataset_type == "MULTI-UNPIVOTED":
-        multi_unpivoted_required_cols = ["job_id", "reviewer_id", "question", "answer"]
-        return set(multi_unpivoted_required_cols) == set(header)
+    for dtype, required_cols in dataset_type.items():
+        if set(required_cols).issubset(header):
+            return dtype
 
     return None
+
+
+def check_dataset_type(file_path, dataset_type):
+    dtype = get_dataset_type(file_path)
+    if dtype is None:
+        logger.error(f"No dataset type returned for file: {file_path}")
+        return None
+    return True if dtype == dataset_type else False
+
 
 
 

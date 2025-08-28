@@ -72,3 +72,21 @@ QUEUE_TRANSFORMATION_FILE_PATH = os.path.join(PIPELINE_ROOT_PATH, DATA_PROCESS_D
 
 # PowerBI Refresh Webhook
 PBI_REFRESH_WEBHOOK = os.getenv("PBI_REFRESH_WEBHOOK_URL")
+
+
+# Dataset Type Detection
+DATASET_HEADER = {
+    "HALO":         ["SRT Annotator ID", "Vendor Auditor ID", "SRT Job ID", "Time (PT)", "Vendor Tag"],
+
+    "ADAP":         ["_unit_id", "_created_at", "_worker_id", "_tainted", "_channel"],
+
+    "UQD":          ["actor_id", "quality_actor_id", "job_id", "review_ds", "queue_name", "decision_data", "quality_decision_data", "extracted_label"],
+
+    "CVS":          ["sample_ds", "entity_id", "rater_id", "routing_name", "rater_decision_data", "auditor_decision_data", "confusion_type", "config"],
+    
+    "UQD-LIKE":     ["actor_id", "decision_data", "decision_id", "job_final_derived_state", "job_id", "last_review_ds", "queue_name"],
+    
+    "HALO-LIKE":    ["Annotator ID", "Annotation Date And Time", "Annotation Job ID", "Annotation AHT s", "Audit Date And Time", "Is Job Successful?"],
+    
+    "MULTI-UNPIVOTED": ["job_id", "reviewer_id", "question", "answer"],
+}
