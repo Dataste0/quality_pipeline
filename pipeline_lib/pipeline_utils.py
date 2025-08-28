@@ -228,7 +228,7 @@ def generate_we_dates(start_date, end_date=None):
         end_date = pd.to_datetime(end_date)
 
     end_friday = get_friday_of_week(end_date)
-    return [first_friday + timedelta(weeks=i) for i in range(((end_friday - first_friday).days // 7) + 1)]
+    return [first_friday + timedelta(weeks=i) for i in range(((end_friday - first_friday).days // 7) + 1)] # type:ignore
 
 
 
