@@ -221,7 +221,7 @@ def uqd_transform(df, stats, mod_config):
     df["job_date"] = df["job_date"].apply(tu.convert_tricky_date)
     stats["skipped_invalid_datetime"] = int(df["job_date"].isnull().sum())
     df = df[df["job_date"].notnull()].copy()
-    
+
 
     # ID Format check
     df["job_id"] = df["job_id"].apply(tu.id_format_check)

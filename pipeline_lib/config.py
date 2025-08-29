@@ -74,7 +74,7 @@ QUEUE_TRANSFORMATION_FILE_PATH = os.path.join(PIPELINE_ROOT_PATH, DATA_PROCESS_D
 PBI_REFRESH_WEBHOOK = os.getenv("PBI_REFRESH_WEBHOOK_URL")
 
 
-# Dataset Type Detection
+# Dataset Header
 DATASET_HEADER = {
     "HALO":         ["SRT Annotator ID", "Vendor Auditor ID", "SRT Job ID", "Time (PT)", "Vendor Tag"],
 

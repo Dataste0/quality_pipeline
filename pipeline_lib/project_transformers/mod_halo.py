@@ -161,7 +161,6 @@ def halo_transform(df, stats, mod_config):
     # Strip quotes from ID Columns
     for col in ["rater_id", "auditor_id", "job_id"]:
         df[col] = df[col].astype("string").str.strip("'")
-    
 
     # ID Format check
     df['rater_id'] = df['rater_id'].apply(tu.id_format_check)
