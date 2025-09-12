@@ -83,7 +83,7 @@ base_dir = st.text_input("Base directory", value="c:/dashboard/Data_Transformed"
 project_id = st.text_input("Project ID", value="a01Hs00001ocUa9IAE")
 base = st.selectbox(
     "Base",
-    options=["audit", "multi", "halo", "rubric"],
+    options=["audit", "multi", "halo"],
     index=0
 )
 target_goal = st.number_input("Target Goal", min_value=0.0, value=0.8, step=0.05, format="%.2f")
