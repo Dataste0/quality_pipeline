@@ -30,7 +30,10 @@ def generate_olap_reports(project_id, project_base, reporting_week, target):
     olap_folder = os.path.join(OLAP_BASE_FOLDER, project_id, reporting_week_str)
     os.makedirs(olap_folder, exist_ok=True)
     
-    for query_name in ["smr-workflow", "smr-rater-label", "smr-job-label", "smr-error-contribution", "dmp-job-incorrect"]:
+    for query_name in ["smr-workflow", "smr-rater-label", "smr-job-label", "smr-rubric-analysis", "smr-error-contribution", "dmp-job-incorrect"]:
+        if query_name == "smr-rubric-analysis" and project_base != "halo":
+            continue
+        
         report_name = project_id + "_" + reporting_week_str + "_" + project_base + "_" + query_name + ".csv"
         
         report_df = olap_query_run(query_name, project_base, project_id, reporting_week, target)

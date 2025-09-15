@@ -32,6 +32,7 @@ def olap_query_run(query_name, base, project_id, reporting_week, target):
             'smr-workflow':             f'smr_workflow_{base}.sql',
             'smr-rater-label':          f'smr_rater_label_{base}.sql',
             'smr-job-label':            f'smr_job_label_{base}.sql',
+            'smr-rubric-analysis':      f'smr_rubric_analysis_{base}.sql',
             'smr-error-contribution':   f'smr_error_contribution_{base}.sql',
             'dmp-job-incorrect':        f'dmp_job_incorrect_{base}.sql'
     }
