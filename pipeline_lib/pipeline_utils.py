@@ -8,7 +8,7 @@ import os
 import ast
 import hashlib
 from datetime import datetime, timedelta
-from pipeline_lib.config import DATASET_HEADER
+from pipeline_lib.config import DATASET_HEADER, DATA_LOG_DIR_PATH
 
 # --- Logger
 import logging
@@ -555,6 +555,15 @@ def hash_file(file_path):
     return hasher.hexdigest()
 
 
+def log_directory_contents(df):
+    dir_log_file = os.path.join(DATA_LOG_DIR_PATH, "directory_log.txt")
+
+    if os.path.exists(dir_log_file):
+        df.to_csv(dir_log_file, mode='a', header=False, index=False)
+    else:
+        df.to_csv(dir_log_file, mode='w', header=True, index=False)
+
+
 def hash_directory_fast(folder_path, is_active):
     hasher = hashlib.md5()
     base_folder = os.path.basename(folder_path)
@@ -564,7 +573,13 @@ def hash_directory_fast(folder_path, is_active):
     valid_ext = {".csv", ".xlsx", ".xls"}
     file_info = []
 
+    # For logging
+    log_dir_content_df = pd.DataFrame(columns=["root", "dirs", "files"])
+
     for root, dirs, files in os.walk(folder_path):
+        # Logging directory content
+        log_dir_content_df = pd.concat([log_dir_content_df, pd.DataFrame([{"root": root, "dirs": dirs, "files": files}])], ignore_index=True)
+
         for filename in files:
             ext = os.path.splitext(filename)[1].lower()
             if ext not in valid_ext:
@@ -588,6 +603,9 @@ def hash_directory_fast(folder_path, is_active):
 
     for entry in sorted(file_info):  # ensure consistent order
         hasher.update(entry.encode("utf-8", errors="ignore"))
+    
+    # Log directory content
+    log_directory_contents(log_dir_content_df)
 
     return hasher.hexdigest()
 
