@@ -7,7 +7,7 @@ import re
 import os
 import ast
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pipeline_lib.config import DATASET_HEADER, DATA_LOG_DIR_PATH
 
 # --- Logger
@@ -574,11 +574,12 @@ def hash_directory_fast(folder_path, is_active):
     file_info = []
 
     # For logging
-    log_dir_content_df = pd.DataFrame(columns=["root", "dirs", "files"])
+    log_dir_content_df = pd.DataFrame(columns=["timestamp", "root", "dirs", "files"])
 
     for root, dirs, files in os.walk(folder_path):
         # Logging directory content
-        log_dir_content_df = pd.concat([log_dir_content_df, pd.DataFrame([{"root": root, "dirs": dirs, "files": files}])], ignore_index=True)
+        log_dir_timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        log_dir_content_df = pd.concat([log_dir_content_df, pd.DataFrame([{"timestamp": log_dir_timestamp, "root": root, "dirs": dirs, "files": files}])], ignore_index=True)
 
         for filename in files:
             ext = os.path.splitext(filename)[1].lower()
