@@ -556,7 +556,7 @@ def hash_file(file_path):
 
 
 def log_directory_contents(df):
-    dir_log_file = os.path.join(DATA_LOG_DIR_PATH, "directory_log.txt")
+    dir_log_file = os.path.join(DATA_LOG_DIR_PATH, "directory_log.csv")
 
     if os.path.exists(dir_log_file):
         df.to_csv(dir_log_file, mode='a', header=False, index=False)
