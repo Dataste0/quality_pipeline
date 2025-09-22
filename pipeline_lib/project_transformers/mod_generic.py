@@ -262,6 +262,14 @@ def generic_transform(df, stats, mod_config):
 
         df = df[base_cols + ["job_correct"]]
 
+
+        # Add additional Halo columns
+        df["job_manual_score"] = pd.NA
+        df["rubric"] = "default_rubric"
+        df["factor"] = 1.0
+        df["rubric_penalty"] = -1.0
+        df["rubric_score"] = 1.0
+
         return df
 
 
