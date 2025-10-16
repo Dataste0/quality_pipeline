@@ -9,7 +9,7 @@ DATA_PARQUET_BASE_PATH = cfg.DATA_PARQUET_DIR_PATH
 def query_map_info_run(item_to_collect="market"):
 
     dfs = []
-    for base_code in ['A', 'M', 'R']:
+    for base_code in ['A', 'M', 'H']:
         # costruisci il pattern del file parquet
         pattern = f"*/*/*_{base_code}_*.parquet"
         input_path = os.path.join(DATA_PARQUET_BASE_PATH, pattern)

@@ -41,7 +41,7 @@ def uqd_extract_labels(json_str, use_extracted):
     try:
         
         if not isinstance(json_str, str) or pd.isna(json_str):
-            logging.error("JSON is None or not a string")
+            logger.error("JSON is None or not a string")
             return []
 
         json_str = json_str.replace("'", '"')
@@ -50,7 +50,7 @@ def uqd_extract_labels(json_str, use_extracted):
         first_level_json = json.loads(json_str)
         
         if use_extracted:
-            logging.debug("Using Extracted Data {json_str}")
+            logger.debug("Using Extracted Data {json_str}")
             if not isinstance(first_level_json, dict):
                 return []
             
@@ -58,14 +58,14 @@ def uqd_extract_labels(json_str, use_extracted):
             try:
                 extracted = [f"{key}::{uqd_format_value(value)}" for key, value in first_level_json.items()]
             except Exception as e1:
-                logging.error(f"Error with '::': {e1}")
+                logger.error(f"Error with '::': {e1}")
                 return []
             extracted_list.extend(extracted)
             return extracted_list
 
 
         if not isinstance(first_level_json, dict):
-            logging.error("Top-level JSON is not an object")
+            logger.error("Top-level JSON is not an object")
             return []
         first_level_key = next(iter(first_level_json), None)
 
@@ -78,7 +78,7 @@ def uqd_extract_labels(json_str, use_extracted):
                 return []
             
             if not isinstance(response_str, str):
-                logging.error("Response key is present but not a string")
+                logger.error("Response key is present but not a string")
                 return []
 
             # Fix JSON formatting in nested response
@@ -86,20 +86,20 @@ def uqd_extract_labels(json_str, use_extracted):
             try:
                 response_data = json.loads(nested_str)
             except json.JSONDecodeError as e:
-                logging.error(f"Nested JSON Decode Error: {e} - {nested_str}")
+                logger.error(f"Nested JSON Decode Error: {e} - {nested_str}")
                 return []
             
             if response_data is None:
                 return []
             
             if not isinstance(response_data, dict):
-                logging.error("Nested response is not an object")
+                logger.error("Nested response is not an object")
                 return []
             
             # Extract entity key
             entity_key = next(iter(response_data), None)
             if not entity_key:
-                logging.error("Entity key not found")
+                logger.error("Entity key not found")
                 return []
             
             # Retrieve the payload
@@ -127,12 +127,12 @@ def uqd_extract_labels(json_str, use_extracted):
                 try:
                     extracted = [f"{key}::{uqd_format_value(value)}" for key, value in values.items()]
                 except Exception as e1:
-                    logging.error(f"Error with '::': {e1}")
+                    logger.error(f"Error with '::': {e1}")
                     try:
                         fallback_extracted = [f"{key}:{uqd_format_value(value)}" for key, value in values.items()]
                         extracted = [entry.replace(":", "::", 1) for entry in fallback_extracted]
                     except Exception as e2:
-                        logging.error(f"Parsing unsuccessful with '::' or ':'.\nError1: {e1}\nError2: {e2}")
+                        logger.error(f"Parsing unsuccessful with '::' or ':'.\nError1: {e1}\nError2: {e2}")
                         return []
                 extracted_list.extend(extracted)
 
@@ -144,14 +144,14 @@ def uqd_extract_labels(json_str, use_extracted):
             return labels if isinstance(labels, list) else []
 
         else:
-            logging.error("Unknown JSON format")
+            logger.error("Unknown JSON format")
             return []
 
     except json.JSONDecodeError as e:
-        logging.error(f"JSON Decode Error: {e} - {json_str}")
+        logger.error(f"JSON Decode Error: {e} - {json_str}")
         return []
     except Exception as e:
-        logging.error(f"Unexpected Error: {e} - {json_str}")
+        logger.error(f"Unexpected Error: {e} - {json_str}")
         return []
 
 
@@ -251,7 +251,7 @@ def uqd_transform(df, stats, mod_config):
 
     
     # Parse JSON
-    logging.debug("Extracting labels UQD_audit")
+    logger.debug("Extracting labels UQD_audit")
     df['rater_labels'] = [uqd_extract_labels(x, use_extracted) for x in df["rater_parse_data"]]
     if needs_auditor:
         df['auditor_labels'] = [uqd_extract_labels(x, use_extracted) for x in df["auditor_parse_data"]]
@@ -284,7 +284,7 @@ def uqd_transform(df, stats, mod_config):
 
     # At this point, check if the dataframe is empty (after removing invalid rows)
     if df.empty:
-        logging.warning("DataFrame is empty after filtering. No valid data to process.")
+        logger.warning("DataFrame is empty after filtering. No valid data to process.")
         stats["transform_error"] = "df_empty_after_filtering"
         return pd.DataFrame()
 
