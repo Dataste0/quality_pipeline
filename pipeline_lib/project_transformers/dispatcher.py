@@ -1,3 +1,4 @@
+import csv
 import importlib
 from turtle import pd
 from pipeline_lib.project_transformers import mod_cvs, mod_uqd, mod_halo, mod_generic
@@ -62,6 +63,35 @@ def process_dataframe(df, project_metadata):
 
     # Transform
     df_transformed, etl_stats = transform_function(df, project_metadata)
+
+
+    # Post-processing
+
+    # -- overwrite workflows with markets from roster list
+    roster_list = module_config.get("roster_list", {})
+    if roster_list:
+        df_transformed['rater_id_norm'] = df_transformed['rater_id'].astype(str)
+        df_transformed['market'] = df_transformed['rater_id_norm'].map(roster_list)
+        df_transformed['market'] = df_transformed['market'].fillna('UNMAPPED')
+        df_transformed.drop(columns=['rater_id_norm'], inplace=True)
+
+        remapping_info = {
+            "operation": "remap_workflow_from_roster",
+            "dataframe_row_count": int(len(df_transformed)),
+            "total_raters_roster_list": int(len(roster_list)),
+            "no_match_row_count": int((df_transformed['market'] == 'UNMAPPED').sum()),
+            "grouped_markets" : df_transformed.groupby('market').size().to_dict()
+        }
+        processed_dict["post_process"] = remapping_info
+
+        # drop unmapped rows
+        df_transformed = df_transformed[df_transformed['market'] != 'UNMAPPED'].copy()
+        # replace workflow values with market values
+        df_transformed.drop(columns=['workflow'], inplace=True)
+        df_transformed.rename(columns={'market': 'workflow'}, inplace=True)
+
+
+
 
     # Add content week column
     if not df_transformed.empty and "job_date" in df_transformed.columns:

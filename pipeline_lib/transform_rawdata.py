@@ -69,7 +69,16 @@ def process_file(raw_file_path, project_metadata, data_week):
         
 
         project_config['module_config']['reporting_week'] = pd.to_datetime(data_week, errors="coerce").strftime("%Y-%m-%d") # Add reporting week for dataset with no job date
-        
+
+        # Check for roster file
+        dir_path = os.path.dirname(raw_file_path)
+        roster_file_path = os.path.join(dir_path, "roster.xlsx")
+        if os.path.exists(roster_file_path):
+            roster_dict = pu.load_roster_list(roster_file_path)
+            project_config['module_config']['roster_list'] = roster_dict
+            logger.debug(f"Roster file found and loaded: {roster_file_path}")
+
+
         ### PROCESS DATAFRAME ###
         df_transformed, transformed_dict = process_dataframe(df, project_metadata)
         process_file_dict["transform_info"] = {"project_id": project_metadata["project_id"], "project_name": project_metadata["project_name"]} | transformed_dict

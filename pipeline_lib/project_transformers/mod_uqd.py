@@ -248,7 +248,7 @@ def uqd_transform(df, stats, mod_config):
     df["rater_parse_data"] = df["rater_parse_data"].fillna("").apply(lambda x: x.replace(";", ","))
     if needs_auditor:
         df["auditor_parse_data"] = df["auditor_parse_data"].fillna("").apply(lambda x: x.replace(";", ","))
-
+    
     
     # Parse JSON
     logger.debug("Extracting labels UQD_audit")
@@ -259,7 +259,8 @@ def uqd_transform(df, stats, mod_config):
     #
     # Returns ['key::value', 'key::value', 'key::value']
     #
-    
+
+
     # Count excluded json rows
     mask_rater = df["rater_labels"].isna() | df["rater_labels"].astype(str).str.lower().isin(["", "na", "null", "nan"])
     if needs_auditor:
@@ -357,6 +358,7 @@ def uqd_transform(df, stats, mod_config):
 
     df = df_long
 
+    # Add binary flags
     if needs_auditor:
         df = tu.add_binary_flags(df, binary_labels)
         #[workflow, job_date, rater_id, auditor_id, job_id] [parent_label] [rater_response, auditor_response] [is_label_binary, confusion_type]

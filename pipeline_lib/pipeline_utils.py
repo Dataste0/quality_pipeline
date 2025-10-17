@@ -199,6 +199,56 @@ def get_project_base(project_id, project_list):
     return project_base
 
 
+def load_roster_list(filepath):
+    if not os.path.exists(filepath):
+        logging.warning(f"Roster file not found: {filepath}")
+        return {}
+    
+    df = load_df_from_filepath(filepath)
+    df.columns = [col.strip().lower() for col in df.columns]
+
+    # Identifies market column
+    market_pattern = re.compile(r"^[A-Z]{2}-[A-Z]{2}$", re.IGNORECASE)
+    market_col = None
+    for col in df.columns:
+        if "market" in col.lower():
+            # Half values should be market codes (EN-US ecc.)
+            vals = df[col].dropna().astype(str)
+            matches = [bool(market_pattern.match(v)) for v in vals]
+            if sum(matches) >= len(vals)//2:
+                market_col = col
+                break
+    
+    # Identifies column contributor_id/SRT ID
+    srt_col = None
+    possible = ["srt", "id", "contributor", "rater"]
+    for col in df.columns:
+        if any(x in col.lower() for x in possible):
+            vals = df[col].dropna().astype(str)
+            # Half values should be long numeric strings (>=10 digits)
+            num_matches = [bool(re.match(r"^[#']?\d{10,}$", v)) for v in vals]
+            if sum(num_matches) >= len(vals)//2:
+                srt_col = col
+                break
+    
+    if market_col is None or srt_col is None:
+        logging.error("Roster file missing required columns (market or contributor ID)")
+        return {}
+
+    # Normalize SRT ID (removes quotes and #)
+    def normalize_id(s):
+        return re.sub(r"^[#']", '', str(s))
+
+    df[srt_col] = df[srt_col].apply(normalize_id)
+
+    # Dedupe
+    unique_pairs = df[[srt_col, market_col]].drop_duplicates()
+
+    # Creates dictionary
+    srt_market_dict = dict(zip(unique_pairs[srt_col], unique_pairs[market_col]))
+
+    return srt_market_dict
+
 # DATES
 
 def get_friday_of_week(date):
