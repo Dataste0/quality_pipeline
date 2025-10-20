@@ -42,8 +42,8 @@ def file_list_compile(project_id, weekdate_str):
         ]
     elif project_id == EB_PROJECT_ID:
         files_required = [
-            f"cvs_eb_metrics_overview_{filedate}.csv",
-            f"cvs_eb_rater_level_metrics_{filedate}.csv"
+            f"cvs_engagement_bait_metrics_overview_{filedate}.csv",
+            f"cvs_engagement_bait_rater_level_metrics_{filedate}.csv"
         ]
     else:
         raise ValueError(f"Unknown project: {project_id}")
@@ -53,8 +53,10 @@ def file_list_compile(project_id, weekdate_str):
 # Check if files are ready
 def all_files_ready(files_required: list, filepath: str) -> bool:
     found = 0
+    #print(f"---Filerequired: {files_required}\n")
     for file_required in files_required:
         path = os.path.join(filepath, file_required)
+        #print(f"---Path: {path}\n")
         if os.path.exists(path):
             #print(f"Found required file: {path}")
             found += 1
