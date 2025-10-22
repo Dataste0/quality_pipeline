@@ -1,5 +1,7 @@
 import pandas as pd
 import re
+import math
+import numpy as np
 
 
 # --- Logger
@@ -59,12 +61,48 @@ def compute_content_week(dates: pd.Series) -> pd.Series:
 
 
 # Actor ID/Job ID check
+"""
 def id_format_check(val):
     int_number_regex = re.compile(r'^\d+$')
     if isinstance(val, str) and int_number_regex.fullmatch(val) and 'e' not in val.lower():
         return val
-    
     return None
+"""
+
+def id_format_check(val):
+    _int_re = re.compile(r'^\d+$')  # only digits
+
+    # NaN / None
+    if val is None:
+        return pd.NA
+    if isinstance(val, float) and math.isnan(val):
+        return pd.NA
+    if pd.isna(val):
+        return pd.NA
+
+    # Bigints (over 10 digits)
+    if isinstance(val, (int, np.integer)):
+        s = str(val)
+        return val if len(s) > 10 else pd.NA
+
+    # Strings
+    if isinstance(val, str):
+        s = val.strip()
+        if not s:
+            return pd.NA
+        # Refuse exponential notation 'e'/'E'
+        if 'e' in s.lower():
+            return pd.NA
+        # only digits
+        if not _int_re.fullmatch(s):
+            return pd.NA
+        # constraint: over 10 digits
+        if len(s) <= 10:
+            return pd.NA
+        return s
+
+    # unsupported types
+    return pd.NA
 
 
 #####################

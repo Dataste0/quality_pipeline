@@ -164,6 +164,8 @@ def uqd_transform(df, stats, mod_config):
         "quality_methodology": "multi",
         "use_extracted": True,
         "excluded_labels": [],
+        "excluded_queues": [],
+        "ignore_missing_auditor_id": False,
         "binary_labels": [
             {
                 "label_name": "is_rateable",
@@ -183,13 +185,16 @@ def uqd_transform(df, stats, mod_config):
 
     quality_methodology = mod_config.get("quality_methodology", None)
     use_extracted = mod_config.get("use_extracted", False)
+    ignore_missing_auditor_id = mod_config.get("ignore_missing_auditor_id", False)
     excluded_list = mod_config.get("excluded_labels", [])
+    excluded_queues = mod_config.get("excluded_queues", [])
     binary_labels = mod_config.get("binary_labels", [])
     label_weights = mod_config.get("label_weights", {})
 
     stats["quality_methodology"] = quality_methodology
     stats["use_extracted"] = use_extracted
     stats["excluded_list"] = excluded_list
+    stats["excluded_queues"] = excluded_queues
     stats["binary_labels"] = binary_labels
     stats["label_weights"] = label_weights
 
@@ -230,7 +235,10 @@ def uqd_transform(df, stats, mod_config):
     if needs_auditor:
         df["auditor_id"] = df["auditor_id"].apply(tu.id_format_check)
         mask_cols.append("auditor_id")
-
+        if ignore_missing_auditor_id:
+            # replace null/nan with a placeholder
+            df["auditor_id"] = df["auditor_id"].fillna("999999999999")
+        
     # Count invalid IDs
     mask_invalid_id = df[mask_cols].isnull().any(axis=1)
     stats["skipped_invalid_id"] = int(mask_invalid_id.sum())
@@ -242,6 +250,13 @@ def uqd_transform(df, stats, mod_config):
     df = df[df["rater_parse_data"].notna() & (df["rater_parse_data"] != '')]
     if needs_auditor:
         df = df[df["auditor_parse_data"].notna() & (df["auditor_parse_data"] != '')]
+    
+    # Remove excluded queues
+    if excluded_queues:
+        initial_count = len(df)
+        df = df[~df["workflow"].isin(excluded_queues)].copy()
+        excluded_count = initial_count - len(df)
+        stats["rows_skipped_excluded_queues"] = int(excluded_count)
 
     
     # Replace semicolon with comma
@@ -251,7 +266,7 @@ def uqd_transform(df, stats, mod_config):
     
     
     # Parse JSON
-    logger.debug("Extracting labels UQD_audit")
+    logger.debug("Extracting labels")
     df['rater_labels'] = [uqd_extract_labels(x, use_extracted) for x in df["rater_parse_data"]]
     if needs_auditor:
         df['auditor_labels'] = [uqd_extract_labels(x, use_extracted) for x in df["auditor_parse_data"]]
@@ -259,6 +274,7 @@ def uqd_transform(df, stats, mod_config):
     #
     # Returns ['key::value', 'key::value', 'key::value']
     #
+
 
 
     # Count excluded json rows

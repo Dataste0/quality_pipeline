@@ -88,8 +88,9 @@ def generate_reports_CB(weekdatestr: str, path: str):
         df = df_last_date
         df['lang'] = df['routing_name'].str.split('_').str.get(2)
         df['lang'] = df['lang'].str.upper()
-
-        selected_columns = ['sample_ds', 'rater_id', 'lang', 'main_label', 'total_count', 'tp_count', 'fp_count', 'tn_count', 'fn_count', 'unweighted_accuracy', 'unweighted_f1', 'unweighted_precision', 'unweighted_recall']
+        df['audit_count'] = df['tp_count'] + df['fp_count'] + df['fn_count']
+        
+        selected_columns = ['sample_ds', 'rater_id', 'lang', 'main_label', 'total_count', 'audit_count', 'tp_count', 'fp_count', 'tn_count', 'fn_count', 'unweighted_accuracy', 'unweighted_f1', 'unweighted_precision', 'unweighted_recall']
         df = df[selected_columns]
         return df
 
@@ -138,10 +139,12 @@ def generate_reports_CB(weekdatestr: str, path: str):
     #rater_label_df.head(100)
 
     # Build Rater Report
-    selected_cols = ['sample_ds', 'rater_id', 'lang', 'main_label', 'total_count', 'tp_count', 'fp_count', 'tn_count', 'fn_count', 'unweighted_accuracy', 'unweighted_f1', 'unweighted_precision', 'unweighted_recall', 'positivity']
+    selected_cols = ['sample_ds', 'rater_id', 'lang', 'main_label', 'total_count', 'audit_count', 'tp_count', 'fp_count', 'tn_count', 'fn_count', 'unweighted_accuracy', 'unweighted_f1', 'unweighted_precision', 'unweighted_recall', 'positivity']
+    print(f"rater_label_df columns: {rater_label_df.columns.tolist()}")
     rater_tmp_df = rater_label_df[selected_cols]
     rater_df = rater_tmp_df.groupby(['sample_ds', 'rater_id', 'lang']).agg({
         'total_count': 'sum',
+        'audit_count': 'sum',
         'tp_count': 'sum',
         'fp_count': 'sum',
         'tn_count': 'sum',
@@ -166,6 +169,7 @@ def generate_reports_CB(weekdatestr: str, path: str):
         'rater_id': 'count',
         'above_target_num': 'sum',
         'total_count': 'sum',
+        'audit_count': 'sum',
         'tp_count': 'sum',
         'fp_count': 'sum',
         'tn_count': 'sum',
@@ -176,7 +180,7 @@ def generate_reports_CB(weekdatestr: str, path: str):
         'unweighted_recall': 'mean',
         'positivity' : 'mean'
     }).reset_index()
-    rater_agg_df.rename(columns={'rater_id' : 'rater_count', 'total_count': 'audit_count', 'above_target_num': 'raters_above_target'}, inplace=True)
+    rater_agg_df.rename(columns={'rater_id' : 'rater_count', 'above_target_num': 'raters_above_target'}, inplace=True)
     #rater_agg_df.head(100)
 
 
@@ -188,6 +192,7 @@ def generate_reports_CB(weekdatestr: str, path: str):
         'rater_id': 'count',
         'above_target_num': 'sum',
         'total_count': 'sum',
+        'audit_count': 'sum',
         'tp_count': 'sum',
         'fp_count': 'sum',
         'tn_count': 'sum',
@@ -198,7 +203,7 @@ def generate_reports_CB(weekdatestr: str, path: str):
         'unweighted_recall': 'mean',
         'positivity': 'mean'
     }).reset_index()
-    rater_agg_comb_df.rename(columns={'rater_id' : 'rater_count', 'total_count': 'audit_count', 'above_target_num': 'raters_above_target'}, inplace=True)
+    rater_agg_comb_df.rename(columns={'rater_id' : 'rater_count', 'above_target_num': 'raters_above_target'}, inplace=True)
     rater_agg_comb_df.insert(2, 'main_label', 'withhold+exagg')
     rater_agg_comb_df['raters_above_target_perc'] = rater_agg_comb_df['raters_above_target'] / rater_agg_comb_df['rater_count']
     #rater_agg_comb_df.head(100)
@@ -393,8 +398,9 @@ def generate_reports_EB(weekdatestr: str, path: str):
         df = df_last_date
         df['lang'] = df['routing_name'].str.split('_').str.get(1)
         #df['lang'] = df['lang'].str.upper()
+        df['audit_count'] = df['tp_count'] + df['fp_count'] + df['fn_count']
 
-        selected_columns = ['sample_ds', 'rater_id', 'lang', 'main_label', 'total_count', 'tp_count', 'fp_count', 'tn_count', 'fn_count', 'unweighted_accuracy', 'unweighted_f1', 'unweighted_precision', 'unweighted_recall']
+        selected_columns = ['sample_ds', 'rater_id', 'lang', 'main_label', 'total_count', 'audit_count', 'tp_count', 'fp_count', 'tn_count', 'fn_count', 'unweighted_accuracy', 'unweighted_f1', 'unweighted_precision', 'unweighted_recall']
         df = df[selected_columns]
         return df
     
@@ -432,6 +438,7 @@ def generate_reports_EB(weekdatestr: str, path: str):
         'rater_id': 'count',
         'above_target_num': 'sum',
         'total_count': 'sum',
+        'audit_count': 'sum',
         'tp_count': 'sum',
         'fp_count': 'sum',
         'tn_count': 'sum',
@@ -442,7 +449,7 @@ def generate_reports_EB(weekdatestr: str, path: str):
         'unweighted_recall': 'mean',
         'positivity': 'mean'
     }).reset_index()
-    rater_agg_df.rename(columns={'rater_id' : 'rater_count', 'total_count': 'audit_count', 'above_target_num': 'raters_above_target'}, inplace=True)
+    rater_agg_df.rename(columns={'rater_id' : 'rater_count', 'above_target_num': 'raters_above_target'}, inplace=True)
     rater_agg_df.insert(2, 'main_label', 'eb')
     rater_agg_df['raters_above_target_perc'] = rater_agg_df['raters_above_target'] / rater_agg_df['rater_count']
     
@@ -586,6 +593,7 @@ def generate_reports_EB(weekdatestr: str, path: str):
 
     output_filepath = os.path.join(OLAP_BASE_FOLDER, EB_PROJECT_ID, weekdatestr, f"{EB_PROJECT_ID}_{weekdatestr}_audit_smr-rater-label.csv")
     dash_rater_df.to_csv(output_filepath, index=False, encoding='utf-8')
+    dash_rater_df.to_csv('debug_eb_rater.csv', index=False, encoding='utf-8')
     return True
 
 
