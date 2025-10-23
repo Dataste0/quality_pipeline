@@ -146,7 +146,7 @@ def expand_label_columns(df, label_col, prefix, excluded_list=None):
     excluded_set = set(x.strip() for x in (excluded_list or []))
     tmp = df[[label_col]].copy()
     tmp[label_col] = tmp[label_col].apply(lambda x: x if isinstance(x, list) else [])
-    exploded = tmp.explode(label_col).reset_index()  # mantiene indice originale
+    exploded = tmp.explode(label_col).reset_index()  # keeing original index
 
     def split_kv(s):
         if not isinstance(s, str) or "::" not in s:

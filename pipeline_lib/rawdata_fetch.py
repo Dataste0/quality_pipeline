@@ -77,6 +77,7 @@ def scan_rawdata_week_folder(project_metadata, data_week, raw_data_root, last_sn
         files_available = [
             f for f in os.listdir(folder_path)
             if f.lower().endswith(allowed_exts)
+            and 'notused' not in f.lower()
             and os.path.getsize(os.path.join(folder_path, f)) > 0
             and pu.has_at_least_one_data_row(os.path.join(folder_path, f))
         ]
