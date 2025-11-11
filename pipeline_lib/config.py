@@ -6,7 +6,7 @@ env_path = Path("folderpath.env.local")
 load_dotenv(dotenv_path=env_path)
 
 RAWDATA_ROOT_PATH = os.getenv("RAWDATA_ROOT_PATH", "C:\\rawdata")
-PIPELINE_ROOT_PATH = os.getenv("PIPELINE_ROOT_PATH", "C:\\pipeline")
+PIPELINE_ROOT_PATH = os.getenv("PIPELINE_ROOT_PATH", "C:\\dashboard")
 
 # RawData Directory Tree
 """

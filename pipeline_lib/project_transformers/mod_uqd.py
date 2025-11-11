@@ -406,10 +406,7 @@ def transform(df, project_metadata):
     module_config = project_config.get("module_config", {})
 
     stats["rows_before_transformation"] = len(df)
-    print(f"DEBUG-ROWS BEFORE TRANSFORMATION: {len(df)}")
     df = uqd_transform(df, stats, module_config)
     stats["rows_after_transformation"] = len(df) if df is not None else 0
 
-    print(f"STATS AFTER TRANSFORMATION: {stats}")
-    print(f"DEBUG-ROWS AFTER TRANSFORMATION: {stats['rows_after_transformation']}")
     return df, stats
