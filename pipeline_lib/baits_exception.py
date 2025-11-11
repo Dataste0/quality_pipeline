@@ -140,7 +140,7 @@ def generate_reports_CB(weekdatestr: str, path: str):
 
     # Build Rater Report
     selected_cols = ['sample_ds', 'rater_id', 'lang', 'main_label', 'total_count', 'audit_count', 'tp_count', 'fp_count', 'tn_count', 'fn_count', 'unweighted_accuracy', 'unweighted_f1', 'unweighted_precision', 'unweighted_recall', 'positivity']
-    print(f"rater_label_df columns: {rater_label_df.columns.tolist()}")
+    #print(f"rater_label_df columns: {rater_label_df.columns.tolist()}")
     rater_tmp_df = rater_label_df[selected_cols]
     rater_df = rater_tmp_df.groupby(['sample_ds', 'rater_id', 'lang']).agg({
         'total_count': 'sum',
