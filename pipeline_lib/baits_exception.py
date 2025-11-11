@@ -593,7 +593,7 @@ def generate_reports_EB(weekdatestr: str, path: str):
 
     output_filepath = os.path.join(OLAP_BASE_FOLDER, EB_PROJECT_ID, weekdatestr, f"{EB_PROJECT_ID}_{weekdatestr}_audit_smr-rater-label.csv")
     dash_rater_df.to_csv(output_filepath, index=False, encoding='utf-8')
-    dash_rater_df.to_csv('debug_eb_rater.csv', index=False, encoding='utf-8')
+    #dash_rater_df.to_csv('debug_eb_rater.csv', index=False, encoding='utf-8')
     return True
 
 
