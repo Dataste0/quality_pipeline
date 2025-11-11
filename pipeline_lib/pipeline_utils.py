@@ -357,12 +357,14 @@ def load_df_from_filepath(file_path):
                 try:
                     logger.debug(f"CSV strict read (engine=c, {enc})")
                     df = pd.read_csv(
-                        file_path, dtype=str, keep_default_na=False,
+                        file_path, dtype=str, keep_default_na=False, index_col=False,
                         encoding=enc, engine="c", quotechar='"', on_bad_lines="error"
                     )
                     if _header_looks_suspicious(df):
+                        print(f"DEBUG-header looks suspicious: {df.head(5)}")
                         logger.warning("Suspicious header detected → retrying permissive parser")
                         raise ParserError("Suspicious header")
+                    
                     return df
                 except (UnicodeDecodeError, ParserError) as e:
                     logger.info(f"Strict read failed/suspicious ({enc}): {e}")
@@ -372,8 +374,9 @@ def load_df_from_filepath(file_path):
             for enc in encodings:
                 try:
                     logger.debug(f"CSV permissive read (engine=python, escape='\\\\', {enc})")
+                    
                     return pd.read_csv(
-                        file_path, dtype=str, keep_default_na=False,
+                        file_path, dtype=str, keep_default_na=False, index_col=False,
                         encoding=enc, engine="python", quotechar='"',
                         escapechar='\\', on_bad_lines="error"
                     )

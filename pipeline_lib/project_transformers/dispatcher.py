@@ -1,6 +1,6 @@
 import csv
 import importlib
-from turtle import pd
+import pandas as pd
 from pipeline_lib.project_transformers import mod_cvs, mod_uqd, mod_halo, mod_generic
 from pipeline_lib.project_transformers.transformer_utils import compute_content_week, column_replacer, string_replacer, regex_replacer
 
@@ -56,7 +56,7 @@ def process_dataframe(df, project_metadata):
 
     # Pre-processing
     module_config = project_metadata.get("project_config", {}).get("module_config", {})
-    [column_replacer(df, item) for item in module_config.get("replace_columns", [])]
+    [column_replacer(df, item) for item in module_config.get("rename_columns", [])]
     [string_replacer(df, item) for item in module_config.get("replace_strings", [])]
     [regex_replacer(df, item) for item in module_config.get("replace_regex", [])]
     
@@ -66,6 +66,7 @@ def process_dataframe(df, project_metadata):
 
 
     # Post-processing
+    df_transformed.to_csv("tmp_df_transformed_postprocess.csv", index=False)
 
     # -- overwrite workflows with markets from roster list
     roster_list = module_config.get("roster_list", {})
