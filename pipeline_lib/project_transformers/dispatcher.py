@@ -66,8 +66,8 @@ def process_dataframe(df, project_metadata):
 
 
     # Post-processing
-    df_transformed.to_csv("tmp_df_transformed_postprocess.csv", index=False)
-
+    
+    
     # -- overwrite workflows with markets from roster list
     roster_list = module_config.get("roster_list", {})
     if roster_list:
