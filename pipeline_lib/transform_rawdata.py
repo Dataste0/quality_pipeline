@@ -2,6 +2,7 @@ import os
 import traceback
 import json
 import pandas as pd
+import os
 
 import pipeline_lib.pipeline_utils as pu
 import pipeline_lib.config as cfg
@@ -22,6 +23,58 @@ project_list_df = pu.load_project_info(PROJECT_MASTERFILE, active_only=False)
 # --- Logger
 import logging
 logger = logging.getLogger(__name__)
+
+
+# --- Generate report/log info
+def generate_report(folder, rawfile, ingestion_result, project_id, data_week, project_metadata, log):
+    logger.info(f"Generating report for file: {rawfile} | Project: {project_id} | WE: {data_week}")
+    
+    text = f"Report for file: {rawfile}\n"
+
+    if ingestion_result:
+        text += f"Ingestion successful\n\n"
+    else:
+        text += f"Ingestion FAILED\n\n"
+    text += f"------------------------------\n"
+
+    timestamp_report = pd.to_datetime("now", utc=True).strftime("%Y-%m-%d %H:%M:%S %Z")
+
+    text += f"Timestamp: {timestamp_report}\n"
+    text += f"Project ID: {project_id}\n"
+    text += f"------------------------------\n"
+    
+    text += f"Transform Error: {log.get('transform_error', 'None')}\n"
+    text += f"Row count: {log.get('row_count', 'None')}\n"
+    
+    skipped_invalid_datetime = log["etl"].get('skipped_invalid_datetime', 0)
+    skipped_invalid_id = log["etl"].get('skipped_invalid_id', 0)
+    skipped_invalid_json = log["etl"].get('skipped_invalid_json', 0)
+    rows_after_transformation = log["etl"].get('rows_after_transformation', 0)
+
+    text += f"Skipped rows due to invalid datetime: {skipped_invalid_datetime}\n"
+    text += f"Skipped rows due to invalid ID: {skipped_invalid_id}\n"
+    text += f"Skipped rows due to invalid JSON: {skipped_invalid_json}\n"
+    text += f"Rows after transformation: {rows_after_transformation}\n"
+
+    if not ingestion_result:
+        if skipped_invalid_json + skipped_invalid_datetime + skipped_invalid_id > 0:
+            text += f"\n------------------------------\n"
+        if skipped_invalid_datetime > 0:
+            text += f"(!) Note: Some rows have invalid datetime entries and were excluded\n"
+        if skipped_invalid_id > 0:
+            text += f"(!) Note: Some rows have invalid IDs and were excluded (check your data source and make sure Excel is not altering them e.g. rounded numbers, exponential notation, etc.)\n"
+        if skipped_invalid_json > 0:
+            text += f"(!) Note: Some rows have invalid JSON entries and were excluded\n"
+
+    timestamp_file = pd.to_datetime("now", utc=True).strftime("%Y%m%d%H%M%S")
+    rawfilename = rawfile.rsplit(".", 1)[0]
+
+    report_file_path = os.path.join(folder, f"{rawfilename}_report_{timestamp_file}.txt")
+
+    with open(report_file_path, "w") as report_file:
+        report_file.write(str(text))
+
+    pass
 
 
 # --- Process file by selecting the proper transformer and saves it to an output path as transformed
@@ -166,6 +219,17 @@ def process_item(item):
     # Process the file
     result, process_file_dict = process_file(raw_file_path, project_metadata, data_week)
 
+    # Generate report
+    generate_report(
+            folder=raw_file_folder, 
+            rawfile=raw_filename, 
+            ingestion_result=result,
+            project_id=item["project_id"],
+            data_week=item["data_week"],
+            project_metadata=project_metadata, 
+            log=process_file_dict.get("transform_info")
+    )
+    
     process_item_dict = {
         "transform_info"    : process_file_dict.get("transform_info"),
         "content_weeks"     : process_file_dict.get("content_weeks", ""),

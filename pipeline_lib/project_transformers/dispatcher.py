@@ -1,7 +1,7 @@
 import csv
 import importlib
 import pandas as pd
-from pipeline_lib.project_transformers import mod_cvs, mod_uqd, mod_halo, mod_generic
+from pipeline_lib.project_transformers import mod_cvs, mod_gala, mod_uqd, mod_halo, mod_generic
 from pipeline_lib.project_transformers.transformer_utils import compute_content_week, column_replacer, string_replacer, regex_replacer
 
 # --- Logger
@@ -13,6 +13,7 @@ STANDARD_DISPATCHER = {
     "UQD": mod_uqd.transform,
     "CVS": mod_cvs.transform,
     "HALO": mod_halo.transform,
+    "GALA": mod_gala.transform,
     "GENERIC": mod_generic.transform
 }
 

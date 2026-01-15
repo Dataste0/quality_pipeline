@@ -78,6 +78,8 @@ PBI_REFRESH_WEBHOOK = os.getenv("PBI_REFRESH_WEBHOOK_URL")
 DATASET_HEADER = {
     "HALO":         ["SRT Annotator ID", "Vendor Auditor ID", "SRT Job ID", "Time (PT)", "Vendor Tag"],
 
+    "GALA":         ["annotator_id", "auditor_id", "task_id", "task_name", "audit_status", "rubric_answer", "QA_score", "original_submission_time"],
+
     "ADAP":         ["_unit_id", "_created_at", "_worker_id", "_tainted", "_channel"],
 
     "UQD":          ["actor_id", "quality_actor_id", "job_id", "review_ds", "queue_name", "decision_data", "quality_decision_data", "extracted_label"],

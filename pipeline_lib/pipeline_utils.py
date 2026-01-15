@@ -54,6 +54,7 @@ def get_project_metadata(project_id, project_list):
     metadata = {}
     metadata["project_id"] = project_row.get("project_id")
     metadata["project_name"] = project_row.get("project_name")
+    metadata["project_codename"] = project_row.get("project_codename")
     metadata["project_config"] = project_row.get("project_config")
     metadata["project_status"] = project_row.get("project_status")
     metadata["project_is_active"] = project_row.get("project_is_active", False).astype(bool)

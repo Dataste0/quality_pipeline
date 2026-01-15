@@ -30,13 +30,13 @@ logger = logging.getLogger(__name__)
 
 # --- Scan weekly data folder
 def scan_rawdata_week_folder(project_metadata, data_week, raw_data_root, last_snapshot, create_missing):
-
     project_id = project_metadata['project_id']
     project_name = project_metadata['project_name']
+    project_codename = project_metadata.get('project_codename', 'unknown')
     project_config = project_metadata.get("project_config", {})
 
-    logger.info(f"Scanning folder: {project_id} | {project_name} // {data_week}")
-    print(f"Scanning folder: {project_id} | {project_name} // {data_week}")
+    logger.info(f"Scanning folder: {project_id} | {project_name} | {project_codename} | // {data_week}")
+    print(f"Scanning folder: {project_id} | {project_name} | {project_codename} // {data_week}")
 
     week_folder_info = pu.get_week_folder(data_week, project_id, raw_data_root)
     folder_path = week_folder_info["path"]
