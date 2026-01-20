@@ -463,7 +463,7 @@ def generate_rubric(
         pen = float(obj["rubric_penalty"])
 
         final.append({
-            "rubric_entry": ext,
+            "rubric_extended": ext,
             "rubric_name": short,
             "rubric_penalty": pen
         })
@@ -484,7 +484,7 @@ def generate_rubric(
             i += 1
 
         final.append({
-            "rubric_entry": ext,
+            "rubric_extended": ext,
             "rubric_name": short,
             "rubric_penalty": float(penalties[ext])
         })

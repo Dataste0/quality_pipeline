@@ -83,7 +83,7 @@ def halo_transform(df, stats, mod_config):
                 {
                     "rubric_extended": "Mentions the Advertiser",
                     "rubric_name": "mentions_advertiser",
-                    "rubric_penalty": 0.25,
+                    "rubric_penalty": 25,
                 }
             ]
 
@@ -131,8 +131,10 @@ def halo_transform(df, stats, mod_config):
     rubric_list.append({
         "rubric_extended": "default_rubric",
         "rubric_name": "default_rubric",
-        "rubric_penalty": -1.0,
+        "rubric_penalty": -100.0,
     })
+    stats["full_rubric"] = rubric_list
+
     df["default_rubric"] = 1  # Default rubric column with value 1
 
     # Making sure all rubric_extended exist; if missing, creates an empty column

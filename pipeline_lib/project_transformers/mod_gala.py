@@ -91,7 +91,7 @@ def gala_transform(df, stats, mod_config):
                 {
                     "rubric_extended": "Mentions the Advertiser",
                     "rubric_name": "mentions_advertiser",
-                    "rubric_penalty": 0.25,
+                    "rubric_penalty": 25,
                 }
             ]
 
@@ -189,12 +189,25 @@ def gala_transform(df, stats, mod_config):
 
     # df["rubric_temp_long"] now has {"Mentions the Advertiser": 2, ...}
 
+    
+    # Euristic to determine rubric entries and penalties
+    full_rubric = tu.generate_rubric(
+        df=df,
+        rubric_column="rubric_temp_long",
+        score_column="manual_score",
+        provided_rubric=mod_config.get("rubric", []),
+        rubric_entries_cols=None,
+        warn_on_conflicts=False
+    )
+
+    
+
+
 
     # Maps rubric full string to proper rubric name: e.g. "Mentions the Advertiser" --> "mentions_advertiser"    
-    rubric_provided = mod_config.get("rubric", [])
 
     # Using provided rubric
-    rubric_mapping = {item["rubric_extended"]: item["rubric_name"] for item in rubric_provided if item.get("rubric_extended") and item.get("rubric_name")}
+    rubric_mapping = {item["rubric_extended"]: item["rubric_name"] for item in full_rubric if item.get("rubric_extended") and item.get("rubric_name")}
 
     # {rubric_extended: count}  -->  {rubric_name: count}
     df["rubric_temp_short"] = df["rubric_temp_long"].apply(
@@ -208,7 +221,7 @@ def gala_transform(df, stats, mod_config):
     # df["rubric_temp_short"] now has {"mentions_advertiser": 2, ...}
     
     # Pull provided rubric in project metadata
-    rubric_provided_list = [item["rubric_name"] for item in rubric_provided]
+    rubric_provided_list = [item["rubric_name"] for item in full_rubric]
     rubric_provided_set = set(rubric_provided_list)
 
     # Combine rubric row-level with complete set
@@ -226,11 +239,12 @@ def gala_transform(df, stats, mod_config):
     df_expanded = pd.json_normalize(df["rubric_temp_short_complete"])
 
     # Add default rubric item
-    rubric_provided.append({
+    full_rubric.append({
         "rubric_extended": "default_rubric",
         "rubric_name": "default_rubric",
-        "rubric_penalty": -1.0,
+        "rubric_penalty": -100.0,
     })
+    stats["full_rubric"] = full_rubric
 
     df_expanded["default_rubric"] = 1  # Default rubric column with value 1
 
@@ -239,7 +253,7 @@ def gala_transform(df, stats, mod_config):
     
     rubric_col_name_map = {
         item["rubric_name"]: f"r_{item['rubric_name']}"
-        for item in rubric_provided
+        for item in full_rubric
         if item.get("rubric_name")
     }
     valid_rubric_map = {src: dst for src, dst in rubric_col_name_map.items() if src in df.columns}
@@ -249,7 +263,6 @@ def gala_transform(df, stats, mod_config):
     # Remove other columns
     keep_cols_list = list(info_columns_map.values()) + list(valid_rubric_map.values())
     df = df[keep_cols_list].copy()
-
 
 
     # Fix date format and remove rows with incorrect dates
@@ -308,6 +321,8 @@ def gala_transform(df, stats, mod_config):
 
     # OUTPUT: ['workflow', 'job_date', 'rater_id', 'auditor_id', 'job_id', 'job_correct', 'job_manual_score'] [r_rubric1, r_rubric2, ... r_default_rubric]
 
+
+
     # Unpivot rubric
     df_long = (
         df.melt(
@@ -329,7 +344,7 @@ def gala_transform(df, stats, mod_config):
         return p / 100 if p >= 1.0 else p
     penalty_map = {
         item['rubric_name']: norm_penalty(item['rubric_penalty'])
-        for item in rubric_provided
+        for item in full_rubric
         if item.get('rubric_name') and item.get('rubric_penalty') not in (None, '')
     }
     df_long["rubric_penalty"] = df_long["rubric"].map(penalty_map).fillna(0.0)
