@@ -8,7 +8,7 @@ import os
 import ast
 import hashlib
 from datetime import datetime, timedelta, timezone
-from pipeline_lib.config import DATASET_HEADER, DATA_LOG_DIR_PATH
+from pipeline_lib.config import DATASET_HEADER, DATA_LOG_DIR_PATH, START_DATE_DEFAULT
 
 # --- Logger
 import logging
@@ -58,9 +58,18 @@ def get_project_metadata(project_id, project_list):
     metadata["project_config"] = project_row.get("project_config")
     metadata["project_status"] = project_row.get("project_status")
     metadata["project_is_active"] = project_row.get("project_is_active", False).astype(bool)
-    metadata["project_start_date"] = pd.to_datetime(project_row.get("project_start_date"), errors='coerce')
     metadata["raw_folder_name"] = project_row.get("raw_folder_name", None)
+
+    start_date = pd.to_datetime(project_row.get("project_start_date"), errors='coerce')
+    data_start_date = pd.to_datetime(START_DATE_DEFAULT)
     
+    metadata["project_start_date"] = (
+        start_date
+        if pd.notna(start_date) and start_date >= data_start_date
+        else data_start_date
+    )
+    
+
     end_date = project_row.get("project_end_date", None)
     if end_date is None or pd.isna(end_date):
         metadata["project_end_date"] = None

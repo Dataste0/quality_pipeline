@@ -92,3 +92,7 @@ DATASET_HEADER = {
     
     "MULTI-UNPIVOTED": ["job_id", "reviewer_id", "question", "answer"],
 }
+
+
+# Default Start Date for Data Processing (won't process data before this date)
+START_DATE_DEFAULT = "2025-07-01"
