@@ -81,7 +81,7 @@ def halo_transform(df, stats, mod_config):
 
             "rubric": [ # Optional
                 {
-                    "rubric_column": "Mentions the Advertiser",
+                    "rubric_extended": "Mentions the Advertiser",
                     "rubric_name": "mentions_advertiser",
                     "rubric_penalty": 0.25,
                 }
@@ -129,22 +129,22 @@ def halo_transform(df, stats, mod_config):
     
     # Add default rubric column
     rubric_list.append({
-        "rubric_column": "default_rubric",
+        "rubric_extended": "default_rubric",
         "rubric_name": "default_rubric",
         "rubric_penalty": -1.0,
     })
     df["default_rubric"] = 1  # Default rubric column with value 1
 
-    # Making sure all rubric_column exist; if missing, creates an empty column
+    # Making sure all rubric_extended exist; if missing, creates an empty column
     for item in rubric_list:
-        col = item.get("rubric_column")
+        col = item.get("rubric_extended")
         if col and col not in df.columns:
             df[col] = pd.NA  # empty column
     
     rubric_map = {
-        f"{item.get('rubric_column')}": f"r_{item.get('rubric_name')}"
+        f"{item.get('rubric_extended')}": f"r_{item.get('rubric_name')}"
         for item in rubric_list
-        if item.get('rubric_column') and item.get('rubric_name')
+        if item.get('rubric_extended') and item.get('rubric_name')
     }
 
     valid_rubric_map = {src: dst for src, dst in rubric_map.items() if src in df.columns}

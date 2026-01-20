@@ -89,7 +89,7 @@ def gala_transform(df, stats, mod_config):
 
             "rubric": [ # Optional
                 {
-                    "rubric_entry": "Mentions the Advertiser",
+                    "rubric_extended": "Mentions the Advertiser",
                     "rubric_name": "mentions_advertiser",
                     "rubric_penalty": 0.25,
                 }
@@ -194,9 +194,9 @@ def gala_transform(df, stats, mod_config):
     rubric_provided = mod_config.get("rubric", [])
 
     # Using provided rubric
-    rubric_mapping = {item["rubric_entry"]: item["rubric_name"] for item in rubric_provided if item.get("rubric_entry") and item.get("rubric_name")}
+    rubric_mapping = {item["rubric_extended"]: item["rubric_name"] for item in rubric_provided if item.get("rubric_extended") and item.get("rubric_name")}
 
-    # {rubric_entry: count}  -->  {rubric_name: count}
+    # {rubric_extended: count}  -->  {rubric_name: count}
     df["rubric_temp_short"] = df["rubric_temp_long"].apply(
         lambda d: {
             rubric_mapping[k]: v
@@ -227,7 +227,7 @@ def gala_transform(df, stats, mod_config):
 
     # Add default rubric item
     rubric_provided.append({
-        "rubric_entry": "default_rubric",
+        "rubric_extended": "default_rubric",
         "rubric_name": "default_rubric",
         "rubric_penalty": -1.0,
     })
