@@ -51,6 +51,9 @@ DATA_TRANSFORMED_DIR = "Data_Transformed"
 DATA_TRANSFORMED_DIR_PATH = os.path.join(PIPELINE_ROOT_PATH, DATA_TRANSFORMED_DIR)
 DATA_PARQUET_DIR_PATH = os.path.join(DATA_TRANSFORMED_DIR_PATH)
 
+UQV2_DIR = "UniversalQualityV2"
+UQV2_DIR_PATH = os.path.join(PIPELINE_ROOT_PATH, UQV2_DIR)
+
 OLAP_DIR = "OLAP_Export"
 OLAP_EXPORT_DIR_PATH = os.path.join(PIPELINE_ROOT_PATH, OLAP_DIR, "Export")
 
@@ -96,3 +99,25 @@ DATASET_HEADER = {
 
 # Default Start Date for Data Processing (won't process data before this date)
 START_DATE_DEFAULT = "2025-07-01"
+
+# Universal Quality V2 Schema
+UQ_V2_SCHEMA = [
+    "project_id",
+    "reporting_week",
+    "content_week",
+    "workflow",
+    "job_date",
+    "rater_id",
+    "auditor_id",
+    "job_id",
+    "job_overall_correct",
+    "job_manual_score",
+    "label",
+    "rater_response",
+    "auditor_response",
+    "is_correct",
+    "is_label_binary",
+    "confusion_type",
+    "weight",
+    "rubric_credit"
+]

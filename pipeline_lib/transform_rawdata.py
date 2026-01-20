@@ -11,6 +11,7 @@ from pipeline_lib.queues import TransformationQueueManager
 
 RAWDATA_BASE_DIR = cfg.RAWDATA_ROOT_PATH
 PARQUET_BASE_DIR = os.path.join(cfg.DATA_TRANSFORMED_DIR_PATH)
+UQV2_BASE_DIR = os.path.join(cfg.UQV2_DIR_PATH)
 
 # --- Setup queues
 TRANSFORMATION_QUEUE_FILE = cfg.QUEUE_TRANSFORMATION_FILE_PATH
@@ -150,30 +151,47 @@ def process_file(raw_file_path, project_metadata, data_week):
 
         name_label = pu.clean_filename(raw_filename)
         data_week_str = data_week.strftime("%Y-%m-%d")
+
+        # Transform dataframe to Universal Quality V2 schema
+        if df_transformed is not None and not df_transformed.empty:
+            uqv2_df = pu.convert_to_uqv2(df_transformed)
         
 
-        # Generate PARQUET output paths
+        # Generate output paths
         parquet_output_folder = os.path.join(PARQUET_BASE_DIR, project_id, data_week_str)
         os.makedirs(parquet_output_folder, exist_ok=True)
+        
+        uqv2_output_folder = os.path.join(UQV2_BASE_DIR, project_id, data_week_str)
+        os.makedirs(uqv2_output_folder, exist_ok=True)
 
         parquet_filenames = []
+        uqv2_filenames = []
         content_weeks_list = []
+
         unique_content_weeks = df_transformed['content_week'].unique().tolist()
         if len(unique_content_weeks) == 0:
             process_file_dict["transform_info"] = {"transform_error": "content_weeks_list_empty" } | transformed_dict
             return False, process_file_dict
 
-        #print(f"\nContent weeks list: {unique_content_weeks}")
         for content_week in unique_content_weeks:
             content_weeks_list.append(content_week)
             cw_str = pd.to_datetime(content_week, errors="coerce").strftime("%Y%m%d")
             
+            # Legacy output
             parquet_output_name = f"{project_id}_{data_week_str}_{name_label}_{base_code}_{cw_str}.parquet"
             parquet_filenames.append(parquet_output_name)
             
             mask = df_transformed["content_week"] == content_week
             df_cw = df_transformed.loc[mask]
             df_cw.to_parquet(os.path.join(parquet_output_folder, parquet_output_name), index=False)
+
+            # UQv2 output
+            uqv2_output_name = f"{project_id}_{data_week_str}_{name_label}_{cw_str}_UQv2.parquet"
+            uqv2_filenames.append(uqv2_output_name)
+
+            mask_uqv2 = uqv2_df["content_week"] == content_week
+            uqv2_df_cw = uqv2_df.loc[mask_uqv2]
+            uqv2_df_cw.to_parquet(os.path.join(uqv2_output_folder, uqv2_output_name), index=False)
             
         process_file_dict["output_filenames"]   = parquet_filenames
         process_file_dict["content_weeks"]      = content_weeks_list

@@ -9,6 +9,7 @@ import ast
 import hashlib
 from datetime import datetime, timedelta, timezone
 from pipeline_lib.config import DATASET_HEADER, DATA_LOG_DIR_PATH, START_DATE_DEFAULT
+from pipeline_lib.config import UQ_V2_SCHEMA
 
 # --- Logger
 import logging
@@ -571,6 +572,32 @@ def check_dataset_type(file_path, dataset_type):
 
 
 
+def convert_to_uqv2(df: pd.DataFrame, schema=UQ_V2_SCHEMA) -> pd.DataFrame:
+
+    # Detect main methodology (rubric VS label)
+    if "rubric" in df.columns:
+        main_methodology = "rubric"
+    else:
+        main_methodology = "label"
+
+    remapping = {
+        # HALO
+        "job_correct": "job_overall_correct",
+        "overall_score": "job_manual_score",
+        "rubric": "label",
+        "rubric_score": "rubric_credit",
+        "factor": "weight",
+        # AUDIT and MULTI
+        "parent_label": "label",
+    }
+
+        
+    df.rename(columns=remapping, inplace=True)
+    df = df.reindex(columns=schema)
+    df["methodology"] = main_methodology
+
+    return df
+
 
 # HASH UTILS
 
@@ -672,6 +699,8 @@ def hash_directory_fast(folder_path, is_active):
     log_directory_contents(log_dir_content_df)
 
     return hasher.hexdigest()
+
+
 
 
 
