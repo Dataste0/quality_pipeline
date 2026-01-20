@@ -292,3 +292,202 @@ def add_responses_match(df_long: pd.DataFrame,
     return out
 
 
+
+def generate_rubric(
+    df,
+    rubric_column,
+    score_column,
+    provided_rubric=None,
+    rubric_entries_cols=None,
+    warn_on_conflicts=True
+):
+    import re
+
+    df = df.copy()
+    df[score_column] = df[score_column].astype(float)
+    df["deduction"] = 100 - df[score_column]
+
+    provided_rubric = provided_rubric or []
+
+    # --------------------
+    # helper: normalize / slugify short name
+    # --------------------
+    def to_short_name(s):
+        s = str(s).strip().lower()
+        s = s.replace("/", "_").replace("-", "_").replace(" ", "_")
+        s = re.sub(r"[^a-z0-9_]+", "", s)   # keep only alnum + underscore
+        s = re.sub(r"_+", "_", s)          # collapse multiple underscores
+        s = s.strip("_")
+        return s
+
+    # --------------------
+    # STEP 0: seed penalties (source of truth) from provided_rubric
+    # map "extended name" -> penalty
+    # --------------------
+    seed_penalties = {}
+    seed_meta = {}  # extended -> full provided object (for priority output)
+
+    for item in provided_rubric:
+        ext = item.get("rubric_entry", item.get("rubric_column"))
+        if ext is None:
+            continue
+        ext = str(ext).strip()
+
+        pen = item.get("rubric_penalty", None)
+        if pen is None:
+            continue
+        pen = float(pen)
+
+        seed_penalties[ext] = pen
+        seed_meta[ext] = {
+            "rubric_entry": ext,  # normalize key in output
+            "rubric_name": item.get("rubric_name") or to_short_name(ext),
+            "rubric_penalty": pen
+        }
+
+    penalties = dict(seed_penalties)       # extended -> penalty
+    seeded_keys = set(seed_penalties.keys())
+
+    # --------------------
+    # helpers: read rubric as list of (extended_entry_name, factor) for a row
+    # --------------------
+    def row_items(r):
+        # WIDE format
+        if rubric_entries_cols is not None:
+            items = []
+            for col in rubric_entries_cols:
+                val = r[col]
+
+                # skip None / NaN
+                if val is None:
+                    continue
+                if isinstance(val, float) and val != val:
+                    continue
+
+                try:
+                    f = float(val)
+                except Exception:
+                    continue
+
+                if f == 0:
+                    continue
+
+                items.append((str(col).strip(), f))
+            return items
+
+        # DICT format
+        rub = r[rubric_column]
+        return [(str(k).strip(), float(v)) for k, v in rub.items()]
+
+    # helper: set penalty with priority to seeds
+    def set_penalty(entry_ext, value, source_label):
+        # never overwrite seeded
+        if entry_ext in seeded_keys:
+            if warn_on_conflicts and penalties.get(entry_ext) != value:
+                print(
+                    f"WARNING (seed priority): {entry_ext} kept at {penalties[entry_ext]} "
+                    f"but {source_label} suggests {value}"
+                )
+            return False
+
+        # keep first computed value (no overwrites); warn if conflicting
+        if entry_ext in penalties:
+            if warn_on_conflicts and penalties[entry_ext] != value:
+                print(
+                    f"WARNING: {entry_ext} already {penalties[entry_ext]} "
+                    f"but {source_label} suggests {value} (keeping existing)"
+                )
+            return False
+
+        penalties[entry_ext] = float(value)
+        return True
+
+    # --------------------
+    # STEP 1: bootstrap from single-entry rows
+    # --------------------
+    for _, r in df.iterrows():
+        items = row_items(r)
+        if len(items) != 1:
+            continue
+
+        entry_ext, factor = items[0]
+        if factor == 0:
+            continue
+
+        value = float(r["deduction"]) / float(factor)
+        set_penalty(entry_ext, value, source_label="single-entry bootstrap")
+
+    # --------------------
+    # STEP 2: iterative propagation (rows with exactly 1 unknown)
+    # --------------------
+    changed = True
+    while changed:
+        changed = False
+
+        for _, r in df.iterrows():
+            items = row_items(r)
+            if not items:
+                continue
+
+            d = float(r["deduction"])
+            known_sum = 0.0
+            unknown = []
+
+            for entry_ext, factor in items:
+                if entry_ext in penalties:
+                    known_sum += float(factor) * float(penalties[entry_ext])
+                else:
+                    unknown.append((entry_ext, float(factor)))
+
+            if len(unknown) == 1:
+                entry_u, factor_u = unknown[0]
+                if factor_u == 0:
+                    continue
+                value = (d - known_sum) / factor_u
+                if set_penalty(entry_u, value, source_label="propagation"):
+                    changed = True
+
+    # --------------------
+    # STEP 3: build final rubric output (provided has priority)
+    # --------------------
+    final = []
+
+    # 3a) include provided (priority) as-is (normalized keys + ensured short name)
+    # also track used short names to avoid duplicates
+    used_short = set()
+    provided_ext_set = set()
+
+    for ext, obj in seed_meta.items():
+        short = obj.get("rubric_name") or to_short_name(ext)
+        short = to_short_name(short)  # normalize even if user provided something odd
+        pen = float(obj["rubric_penalty"])
+
+        final.append({
+            "rubric_entry": ext,
+            "rubric_name": short,
+            "rubric_penalty": pen
+        })
+        used_short.add(short)
+        provided_ext_set.add(ext)
+
+    # 3b) add discovered entries not in provided
+    # deterministic order
+    for ext in sorted(penalties.keys()):
+        if ext in provided_ext_set:
+            continue
+
+        short = to_short_name(ext)
+        base = short
+        i = 2
+        while short in used_short:
+            short = f"{base}_{i}"
+            i += 1
+
+        final.append({
+            "rubric_entry": ext,
+            "rubric_name": short,
+            "rubric_penalty": float(penalties[ext])
+        })
+        used_short.add(short)
+
+    return final
