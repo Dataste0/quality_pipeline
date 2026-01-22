@@ -573,9 +573,10 @@ def check_dataset_type(file_path, dataset_type):
 
 
 def convert_to_uqv2(df: pd.DataFrame, schema=UQ_V2_SCHEMA) -> pd.DataFrame:
+    uqv2_df =df.copy()
 
     # Detect main methodology (rubric VS label)
-    if "rubric" in df.columns:
+    if "rubric" in uqv2_df.columns:
         main_methodology = "rubric"
     else:
         main_methodology = "label"
@@ -592,11 +593,11 @@ def convert_to_uqv2(df: pd.DataFrame, schema=UQ_V2_SCHEMA) -> pd.DataFrame:
     }
 
         
-    df.rename(columns=remapping, inplace=True)
-    df = df.reindex(columns=schema)
-    df["methodology"] = main_methodology
+    uqv2_df.rename(columns=remapping, inplace=True)
+    uqv2_df = uqv2_df.reindex(columns=schema)
+    uqv2_df["methodology"] = main_methodology
 
-    return df
+    return uqv2_df
 
 
 # HASH UTILS

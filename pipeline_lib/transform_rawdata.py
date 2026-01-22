@@ -180,7 +180,6 @@ def process_file(raw_file_path, project_metadata, data_week):
             # Legacy output
             parquet_output_name = f"{project_id}_{data_week_str}_{name_label}_{base_code}_{cw_str}.parquet"
             parquet_filenames.append(parquet_output_name)
-            
             mask = df_transformed["content_week"] == content_week
             df_cw = df_transformed.loc[mask]
             df_cw.to_parquet(os.path.join(parquet_output_folder, parquet_output_name), index=False)
@@ -188,7 +187,6 @@ def process_file(raw_file_path, project_metadata, data_week):
             # UQv2 output
             uqv2_output_name = f"{project_id}_{data_week_str}_{name_label}_{cw_str}_UQv2.parquet"
             uqv2_filenames.append(uqv2_output_name)
-
             mask_uqv2 = uqv2_df["content_week"] == content_week
             uqv2_df_cw = uqv2_df.loc[mask_uqv2]
             uqv2_df_cw.to_parquet(os.path.join(uqv2_output_folder, uqv2_output_name), index=False)
