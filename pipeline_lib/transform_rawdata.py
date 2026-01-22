@@ -154,7 +154,7 @@ def process_file(raw_file_path, project_metadata, data_week):
 
         # Transform dataframe to Universal Quality V2 schema
         if df_transformed is not None and not df_transformed.empty:
-            uqv2_df = pu.convert_to_uqv2(df_transformed)
+            uqv2_df = pu.convert_to_uqv2(df_transformed.copy())
         
 
         # Generate output paths
