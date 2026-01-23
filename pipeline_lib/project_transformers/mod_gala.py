@@ -238,13 +238,16 @@ def gala_transform(df, stats, mod_config):
     # Expand dict into columns
     df_expanded = pd.json_normalize(df["rubric_temp_short_complete"])
 
+    # Store rubric used in stats
+    stats["rubric_used"] = full_rubric
+
     # Add default rubric item
     full_rubric.append({
         "rubric_extended": "default_rubric",
         "rubric_name": "default_rubric",
         "rubric_penalty": -100.0,
     })
-    stats["rubric_used"] = full_rubric
+    
 
     df_expanded["default_rubric"] = 1  # Default rubric column with value 1
 

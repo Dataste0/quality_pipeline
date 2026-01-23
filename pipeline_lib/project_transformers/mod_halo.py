@@ -162,14 +162,15 @@ def halo_transform(df, stats, mod_config):
         warn_on_conflicts=False
     )
 
-    
+    # Store rubric used in stats
+    stats["rubric_used"] = full_rubric
+
     # Add default rubric column
     full_rubric.append({
         "rubric_extended": "default_rubric",
         "rubric_name": "default_rubric",
         "rubric_penalty": -100.0,
     })
-    stats["rubric_used"] = full_rubric
 
     df["default_rubric"] = 1  # Default rubric column with value 1
 
