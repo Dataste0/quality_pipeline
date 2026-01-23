@@ -3,6 +3,7 @@ import traceback
 import json
 import pandas as pd
 import os
+import glob
 
 import pipeline_lib.pipeline_utils as pu
 import pipeline_lib.config as cfg
@@ -47,10 +48,11 @@ def generate_report(folder, rawfile, ingestion_result, project_id, data_week, pr
     text += f"Transform Error: {log.get('transform_error', 'None')}\n"
     text += f"Row count: {log.get('row_count', 'None')}\n"
     
-    skipped_invalid_datetime = log["etl"].get('skipped_invalid_datetime', 0)
-    skipped_invalid_id = log["etl"].get('skipped_invalid_id', 0)
-    skipped_invalid_json = log["etl"].get('skipped_invalid_json', 0)
-    rows_after_transformation = log["etl"].get('rows_after_transformation', 0)
+    etl_log = log.get("etl", {})
+    skipped_invalid_datetime = etl_log.get('skipped_invalid_datetime', 0)
+    skipped_invalid_id = etl_log.get('skipped_invalid_id', 0)
+    skipped_invalid_json = etl_log.get('skipped_invalid_json', 0)
+    rows_after_transformation = etl_log.get('rows_after_transformation', 0)
 
     text += f"Skipped rows due to invalid datetime: {skipped_invalid_datetime}\n"
     text += f"Skipped rows due to invalid ID: {skipped_invalid_id}\n"
@@ -69,6 +71,15 @@ def generate_report(folder, rawfile, ingestion_result, project_id, data_week, pr
 
     timestamp_file = pd.to_datetime("now", utc=True).strftime("%Y%m%d%H%M%S")
     rawfilename = rawfile.rsplit(".", 1)[0]
+
+    # remove older reports for the same rawfilename
+    pattern = os.path.join(folder, f"{rawfilename}_report_*.txt")
+    for old_report in glob.glob(pattern):
+        try:
+            os.remove(old_report)
+            logger.info(f"Removed old report: {old_report}")
+        except Exception as e:
+            logger.warning(f"Could not remove old report {old_report}: {e}")
 
     report_file_path = os.path.join(folder, f"{rawfilename}_report_{timestamp_file}.txt")
 
@@ -125,12 +136,24 @@ def process_file(raw_file_path, project_metadata, data_week):
         project_config['module_config']['reporting_week'] = pd.to_datetime(data_week, errors="coerce").strftime("%Y-%m-%d") # Add reporting week for dataset with no job date
 
         # Check for roster file
-        dir_path = os.path.dirname(raw_file_path)
-        roster_file_path = os.path.join(dir_path, "roster.xlsx")
-        if os.path.exists(roster_file_path):
-            roster_dict = pu.load_roster_list(roster_file_path)
-            project_config['module_config']['roster_list'] = roster_dict
-            logger.debug(f"Roster file found and loaded: {roster_file_path}")
+        if project_config['module_config'].get('workflow_map', False):
+            roster_file_name = project_config['module_config']['workflow_map']
+            dir_path = os.path.dirname(raw_file_path)
+            roster_file_path = os.path.join(dir_path, roster_file_name)
+            if os.path.exists(roster_file_path):
+                roster_dict = pu.load_roster_list(roster_file_path)
+                project_config['module_config']['workflow_map_list'] = roster_dict
+                logger.debug(f"Workflow file map found and loaded: {roster_file_path}")
+        
+        # Check for email map file
+        if project_config['module_config'].get('email_srt_map', False):
+            email_srt_file_name = project_config['module_config']['email_srt_map']
+            dir_path = os.path.dirname(raw_file_path)
+            email_srt_file_path = os.path.join(dir_path, email_srt_file_name)
+            if os.path.exists(email_srt_file_path):
+                email_srt_dict = pu.load_email_list(email_srt_file_path)
+                project_config['module_config']['email_srt_map_list'] = email_srt_dict
+                logger.debug(f"Email SRT file map found and loaded: {email_srt_file_path}")
 
 
         ### PROCESS DATAFRAME ###

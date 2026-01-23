@@ -260,6 +260,73 @@ def load_roster_list(filepath):
 
     return srt_market_dict
 
+
+def load_email_list(filepath):
+    if not os.path.exists(filepath):
+        logging.warning(f"Email map file not found: {filepath}")
+        return {}
+    
+    df = load_df_from_filepath(filepath)
+    df.columns = [col.strip().lower() for col in df.columns]
+
+    email_pattern = re.compile(r"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$", re.IGNORECASE)
+    email_col = None
+
+    email_name_hints = ["email", "e-mail", "mail"]
+    candidate_cols = sorted(
+        df.columns,
+        key=lambda c: (0 if any(h in c for h in email_name_hints) else 1)
+    )
+
+    for col in candidate_cols:
+        vals = df[col].dropna().astype(str).str.strip()
+        if len(vals) == 0:
+            continue
+        matches = [bool(email_pattern.match(v)) for v in vals]
+        if sum(matches) >= len(vals) // 2:
+            email_col = col
+            break
+
+    # --- Identify SRT/Contributor ID column ---
+    srt_col = None
+    possible = ["srt", "id", "contributor", "rater"]
+    for col in df.columns:
+        if any(x in col for x in possible):
+            vals = df[col].dropna().astype(str).str.strip()
+            if len(vals) == 0:
+                continue
+            # Half values should be long numeric strings (>=10 digits), optionally prefixed by # or '
+            num_matches = [bool(re.match(r"^[#']?\d{10,}$", v)) for v in vals]
+            if sum(num_matches) >= len(vals) // 2:
+                srt_col = col
+                break
+
+    if email_col is None or srt_col is None:
+        logging.error("Email list file missing required columns (email or contributor ID)")
+        return {}
+
+    # --- Normalize ---
+    def normalize_id(s):
+        return re.sub(r"^[#']", "", str(s).strip())
+
+    def normalize_email(s):
+        return str(s).strip().lower()
+
+    df[srt_col] = df[srt_col].apply(normalize_id)
+    df[email_col] = df[email_col].apply(normalize_email)
+
+    # keep only plausible emails (extra safety)
+    df = df[df[email_col].apply(lambda x: bool(email_pattern.match(x)))]
+
+    # --- Dedupe ---
+    unique_pairs = df[[email_col, srt_col]].drop_duplicates()
+
+    # --- Build dict: email -> srtid ---
+    email_srt_dict = dict(zip(unique_pairs[email_col], unique_pairs[srt_col]))
+
+    return email_srt_dict
+
+
 # DATES
 
 def get_friday_of_week(date):
@@ -397,9 +464,35 @@ def load_df_from_filepath(file_path):
 
             raise ValueError(f"Unable to parse CSV (strict/permissive failed): {last_err}")
 
+
         elif ext in (".xlsx", ".xls"):
-            logger.debug("Loading Excel file (Sheet[0])")
-            return pd.read_excel(file_path, sheet_name=0, engine='openpyxl', dtype=str, keep_default_na=False)
+            logger.debug("Loading Excel file")
+
+            try:
+                logger.debug("Trying to load sheet 'spotcheck_data'")
+                return pd.read_excel(
+                    file_path,
+                    sheet_name="spotcheck_data",
+                    engine="openpyxl",
+                    dtype=str,
+                    keep_default_na=False
+                )
+            except ValueError as e:
+                # ValueError is sheet doesn't exist
+                logger.warning(
+                    "Sheet 'spotcheck_data' not found, falling back to sheet[0]"
+                )
+                logger.debug(f"Excel fallback reason: {e}")
+
+                return pd.read_excel(
+                    file_path,
+                    sheet_name=0,
+                    engine="openpyxl",
+                    dtype=str,
+                    keep_default_na=False
+                )
+            #logger.debug("Loading Excel file (Sheet[0])")
+            #return pd.read_excel(file_path, sheet_name=0, engine='openpyxl', dtype=str, keep_default_na=False)
 
         else:
             logger.error(f"Unsupported file type: {ext}")
@@ -548,10 +641,30 @@ def get_dataset_type(file_path):
     try:
         if file_path.lower().endswith(".csv"):
             df = pd.read_csv(file_path, nrows=0, dtype=str)
+
         elif file_path.lower().endswith((".xls", ".xlsx")):
-            df = pd.read_excel(file_path, nrows=0, dtype=str)
-    except Exception as e:
-        #logger.error(f"Error reading file {file_path}: {e}")
+            # Try spotcheck_data sheet first
+            try:
+                df = pd.read_excel(
+                    file_path,
+                    sheet_name="spotcheck_data",
+                    nrows=0,
+                    dtype=str,
+                    engine="openpyxl"
+                )
+            except ValueError:
+                # Sheet does not exist: fallback
+                df = pd.read_excel(
+                    file_path,
+                    sheet_name=0,
+                    nrows=0,
+                    dtype=str,
+                    engine="openpyxl"
+                )
+        else:
+            return None
+
+    except Exception:
         return None
 
     header = df.columns.str.strip().tolist()

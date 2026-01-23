@@ -1,7 +1,7 @@
 import csv
 import importlib
 import pandas as pd
-from pipeline_lib.project_transformers import mod_cvs, mod_gala, mod_uqd, mod_halo, mod_generic
+from pipeline_lib.project_transformers import mod_cvs, mod_gala, mod_uqd, mod_halo, mod_generic, mod_spotcheck
 from pipeline_lib.project_transformers.transformer_utils import compute_content_week, column_replacer, string_replacer, regex_replacer
 
 # --- Logger
@@ -14,6 +14,7 @@ STANDARD_DISPATCHER = {
     "CVS": mod_cvs.transform,
     "HALO": mod_halo.transform,
     "GALA": mod_gala.transform,
+    "SPOTCHECK": mod_spotcheck.transform,
     "GENERIC": mod_generic.transform
 }
 
@@ -60,6 +61,26 @@ def process_dataframe(df, project_metadata):
     [column_replacer(df, item) for item in module_config.get("rename_columns", [])]
     [string_replacer(df, item) for item in module_config.get("replace_strings", [])]
     [regex_replacer(df, item) for item in module_config.get("replace_regex", [])]
+
+
+    # -- get srtid from email_srt_map file
+    email_srt_map_list = module_config.get("email_srt_map", {})
+    if email_srt_map_list:
+        df['srtid'] = df['Email'].map(email_srt_map_list)
+        df['srtid'] = df['srtid'].astype(str)
+        df['srtid'] = df['srtid'].fillna('UNMAPPED')
+
+        remapping_info = {
+            "operation": "remap_srtid_from_email_file",
+            "dataframe_row_count": int(len(df)),
+            "total_raters_in_map_list": int(len(email_srt_map_list)),
+            "no_match_row_count": int((df['srtid'] == 'UNMAPPED').sum())
+        }
+        processed_dict["pre_process"] = remapping_info
+
+        # drop unmapped rows
+        df = df[df['srtid'] != 'UNMAPPED'].copy()
+
     
 
     # Transform
@@ -70,17 +91,17 @@ def process_dataframe(df, project_metadata):
     
     
     # -- overwrite workflows with markets from roster list
-    roster_list = module_config.get("roster_list", {})
-    if roster_list:
+    workflow_map_list = module_config.get("workflow_map_list", {})
+    if workflow_map_list:
         df_transformed['rater_id_norm'] = df_transformed['rater_id'].astype(str)
-        df_transformed['market'] = df_transformed['rater_id_norm'].map(roster_list)
+        df_transformed['market'] = df_transformed['rater_id_norm'].map(workflow_map_list)
         df_transformed['market'] = df_transformed['market'].fillna('UNMAPPED')
         df_transformed.drop(columns=['rater_id_norm'], inplace=True)
 
         remapping_info = {
-            "operation": "remap_workflow_from_roster",
+            "operation": "remap_workflow_from_roster_file",
             "dataframe_row_count": int(len(df_transformed)),
-            "total_raters_roster_list": int(len(roster_list)),
+            "total_raters_workflow_map_list": int(len(workflow_map_list)),
             "no_match_row_count": int((df_transformed['market'] == 'UNMAPPED').sum()),
             "grouped_markets" : df_transformed.groupby('market').size().to_dict()
         }

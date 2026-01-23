@@ -85,6 +85,8 @@ DATASET_HEADER = {
 
     "ADAP":         ["_unit_id", "_created_at", "_worker_id", "_tainted", "_channel"],
 
+    "SPOTCHECK":    ["project_id", "queue", "job_id", "actor_id", "review_date", "label", "ground_truth", "is_spotcheck"],
+
     "UQD":          ["actor_id", "quality_actor_id", "job_id", "review_ds", "queue_name", "decision_data", "quality_decision_data", "extracted_label"],
 
     "CVS":          ["sample_ds", "entity_id", "rater_id", "routing_name", "rater_decision_data", "auditor_decision_data", "confusion_type", "config"],
