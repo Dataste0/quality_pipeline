@@ -304,7 +304,10 @@ def generate_rubric(
     import re
 
     df = df.copy()
-    df[score_column] = df[score_column].astype(float)
+    df[score_column] = pd.to_numeric(df[score_column], errors="coerce")
+    df = df[df[score_column].notna()]
+    
+    #df[score_column] = df[score_column].astype(float)
     df["deduction"] = 100 - df[score_column]
 
     provided_rubric = provided_rubric or []

@@ -22,6 +22,27 @@ HALO_WORKFLOW_COL_NAME = "Rubric Name"
 HALO_WORKFLOW_COL_NAME_FALLBACK = "Queue Name"
 HALO_MANUAL_SCORE_COL_NAME = "Vendor Manual QA Score"
 
+HALO_INFO_ALL_DEFAULT_COLUMN_NAMES = [
+    'Annotator ID',
+    'SRT Annotator ID',
+    'Name',
+    'Response ID',
+    'SRT Queue ID',
+    'Queue Name',
+    'Queue ID',
+    'SRT Job ID',
+    'Time (PT)',
+    'Annotation Link',
+    'Rubric ID',
+    'Rubric Name',
+    'Vendor Manual QA Score',
+    'Vendor Tag',
+    'Vendor Auditor ID',
+    'Vendor Review Sample',
+    'Vendor Comment'
+]
+
+
 INFO_COLUMN_RULES = {
     "rater_id": {
         "config_key": "rater_id_column",
@@ -126,26 +147,41 @@ def halo_transform(df, stats, mod_config):
 
     # RUBRIC COLUMNS
     rubric_list = mod_config.get("rubric", [])
+
+    # Potential rubric columns
+    halo_info_all_column_names = set(HALO_INFO_ALL_DEFAULT_COLUMN_NAMES+list(info_columns_map.values()))
+    rubric_cols_candidates = [col for col in df.columns if col not in halo_info_all_column_names]
+
+    # Euristic to determine rubric entries and penalties
+    full_rubric = tu.generate_rubric(
+        df=df,
+        rubric_column=None,
+        score_column="manual_score",
+        provided_rubric=mod_config.get("rubric", []),
+        rubric_entries_cols=rubric_cols_candidates,
+        warn_on_conflicts=False
+    )
+
     
     # Add default rubric column
-    rubric_list.append({
+    full_rubric.append({
         "rubric_extended": "default_rubric",
         "rubric_name": "default_rubric",
         "rubric_penalty": -100.0,
     })
-    stats["full_rubric"] = rubric_list
+    stats["rubric_used"] = full_rubric
 
     df["default_rubric"] = 1  # Default rubric column with value 1
 
     # Making sure all rubric_extended exist; if missing, creates an empty column
-    for item in rubric_list:
+    for item in full_rubric:
         col = item.get("rubric_extended")
         if col and col not in df.columns:
             df[col] = pd.NA  # empty column
     
     rubric_map = {
         f"{item.get('rubric_extended')}": f"r_{item.get('rubric_name')}"
-        for item in rubric_list
+        for item in full_rubric
         if item.get('rubric_extended') and item.get('rubric_name')
     }
 

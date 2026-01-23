@@ -244,7 +244,7 @@ def gala_transform(df, stats, mod_config):
         "rubric_name": "default_rubric",
         "rubric_penalty": -100.0,
     })
-    stats["full_rubric"] = full_rubric
+    stats["rubric_used"] = full_rubric
 
     df_expanded["default_rubric"] = 1  # Default rubric column with value 1
 
