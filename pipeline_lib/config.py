@@ -7,6 +7,7 @@ load_dotenv(dotenv_path=env_path)
 
 RAWDATA_ROOT_PATH = os.getenv("RAWDATA_ROOT_PATH", "C:\\rawdata")
 PIPELINE_ROOT_PATH = os.getenv("PIPELINE_ROOT_PATH", "C:\\dashboard")
+CQR_ROOT_PATH = os.getenv("CQR_ROOT_PATH", "C:\\cqr")
 
 # RawData Directory Tree
 """

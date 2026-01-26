@@ -4,6 +4,7 @@ from pipeline_lib.rawdata_fetch import generate_rawdata_snapshot, compare_rawdat
 from pipeline_lib.transform_rawdata import transform_enqueued_items
 from pipeline_lib.olap_sync import olap_sync
 from pipeline_lib.powerbi import powerbi_refresh
+from pipeline_lib.cqr import cqr
 
 # --- Setup loggers
 setup_logging()
@@ -19,6 +20,7 @@ def main():
     group.add_argument('--transform', action='store_true', help='Only transform enqueued items')
     group.add_argument('--olap', action='store_true', help='Only sync OLAP reports')
     group.add_argument('--pbi', action='store_true', help='Only refresh Power BI dataset')
+    group.add_argument('--cqr', action='store_true', help='Only run the CQR process')
 
     args = parser.parse_args()
 
@@ -40,6 +42,8 @@ def main():
         olap_sync()
     elif args.pbi:
         powerbi_refresh()
+    elif args.cqr:
+        cqr()
 
     print("QUALITY PIPELINE - Iteration Ended")
 

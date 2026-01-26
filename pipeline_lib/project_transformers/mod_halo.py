@@ -273,7 +273,7 @@ def halo_transform(df, stats, mod_config):
         return p / 100 if p >= 1.0 else p
     penalty_map = {
         item['rubric_name']: norm_penalty(item['rubric_penalty'])
-        for item in rubric_list
+        for item in full_rubric
         if item.get('rubric_name') and item.get('rubric_penalty') not in (None, '')
     }
     df_long["rubric_penalty"] = df_long["rubric"].map(penalty_map).fillna(0.0)
