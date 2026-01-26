@@ -263,6 +263,18 @@ def gala_transform(df, stats, mod_config):
     df.rename(columns=valid_rubric_map, inplace=True)
 
 
+    # Keep only rows with Appen in df[auditor_organization]
+    # track skipped rows
+    if "auditor_organization" in df.columns:
+        stats["skipped_non_appen_organization"] = int((~df["auditor_organization"].str.contains("Appen", na=False)).sum())
+    df = df[df["auditor_organization"].str.contains("Appen", na=False)].copy()
+
+    # Remove rows where auditor_id == rater_id
+    mask_same_id = df["auditor_id"] == df["rater_id"]
+    stats["skipped_same_auditor_rater"] = int(mask_same_id.sum())
+    df = df[~mask_same_id].copy()
+
+
     # Remove other columns
     keep_cols_list = list(info_columns_map.values()) + list(valid_rubric_map.values())
     df = df[keep_cols_list].copy()
