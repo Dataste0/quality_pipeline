@@ -113,7 +113,7 @@ class SnapshotManager:
         try:
             if not os.path.exists(self.filepath):
                 return pd.DataFrame(columns=self.columns)
-            df = pd.read_csv(self.filepath)
+            df = pd.read_csv(self.filepath, low_memory=False)
             if "snapshot_id" not in df.columns:
                 return pd.DataFrame(columns=df.columns)
             df["snapshot_id"] = pd.to_numeric(df["snapshot_id"], errors="coerce")
