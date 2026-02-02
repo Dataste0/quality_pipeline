@@ -22,7 +22,16 @@ def main():
     group.add_argument('--pbi', action='store_true', help='Only refresh Power BI dataset')
     group.add_argument('--cqr', action='store_true', help='Only run the CQR process')
 
+    parser.add_argument(
+        '--week',
+        type=str,
+        help='Target week for CQR (e.g. 2025-01-16)'
+    )
+
     args = parser.parse_args()
+
+    if args.week and not args.cqr:
+        parser.error("--week can only be used together with --cqr")
 
     print("QUALITY PIPELINE - Iteration Started")
 
@@ -32,6 +41,7 @@ def main():
         transform_enqueued_items()
         success_count = olap_sync()
         powerbi_refresh() if success_count > 0 else print("Power BI refresh skipped due to no OLAP updates.")
+        cqr() if success_count > 0 else print("CQR process skipped due to no OLAP updates.")
     elif args.snapshot:
         generate_rawdata_snapshot()
     elif args.enqueue:
@@ -43,7 +53,7 @@ def main():
     elif args.pbi:
         powerbi_refresh()
     elif args.cqr:
-        cqr()
+        cqr(week=args.week) 
 
     print("QUALITY PIPELINE - Iteration Ended")
 

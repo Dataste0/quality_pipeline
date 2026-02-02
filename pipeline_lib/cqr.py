@@ -17,7 +17,7 @@ CQR_PATH = cfg.CQR_ROOT_PATH
 EXPORT_PATH = cfg.OLAP_EXPORT_DIR_PATH
 
 
-def cqr():
+def cqr(week: str = None):
     logger.info(f"CQR Phase Started")
     print("[INFO] CQR Phase Started")
 
@@ -28,8 +28,12 @@ def cqr():
     CQRs = []
 
     # Get Week Ending Dates
-    current_date = pd.to_datetime("today")
-    previous_weekending = pu.get_friday_of_week(current_date) - pd.Timedelta(days=7)
+    if week is None:
+        current_date = pd.to_datetime("today")
+        previous_weekending = pu.get_friday_of_week(current_date) - pd.Timedelta(days=7)
+    else:
+        current_date = pu.get_friday_of_week(pd.to_datetime(week))
+        previous_weekending = pu.get_friday_of_week(current_date)
 
     if pd.notna(previous_weekending):
         previous_weekending_str = previous_weekending.strftime("%Y-%m-%d")
