@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 import pipeline_lib.pipeline_utils as pu
 import pipeline_lib.config as cfg
 
@@ -92,11 +93,19 @@ def cqr(week: str = None):
             .map(lambda x: f"'{x}" if x is not None else x)
         )
 
-        # consider n as separator
-        rater_export_df['project_id_main'] = rater_export_df['project_id'].str.split('n').str[0]
-        rater_export_df['segment'] = rater_export_df['project_id'].str.split('n').str[1]
+        # consider n[digit] as separator
+        rater_export_df['project_id_main'] = rater_export_df['project_id'].str.replace(
+            r'n[0-9]$', '', regex=True
+        )
+        rater_export_df['segment'] = rater_export_df['project_id'].str.extract(
+            r'n([0-9])$', expand=False
+        )
+        #rater_export_df['project_id_main'] = rater_export_df['project_id'].str.split('n').str[0]
+        #rater_export_df['segment'] = rater_export_df['project_id'].str.split('n').str[1]
+
         # Fill segments with '1' if missing
         rater_export_df['segment'] = rater_export_df['segment'].fillna('1')
+
 
         # remove project_id col and replace with project_id_main
         rater_export_df = rater_export_df.drop(columns=['project_id'])
