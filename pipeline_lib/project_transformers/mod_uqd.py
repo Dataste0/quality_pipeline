@@ -7,6 +7,7 @@ import pandas as pd
 import json
 import re
 from pipeline_lib.project_transformers import transformer_utils as tu
+from typing import Any
 
 # --- Logger
 import logging
@@ -25,15 +26,60 @@ UQD_AUDITOR_DECISION_DATA_COL_NAME = "quality_decision_data"
 UQD_AUDITOR_EXTRACTED_DECISION_DATA_COL_NAME = "quality_extracted_label"
 
 
-# Flatten values, converting lists/dictionaries into strings
+
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]")
+_WHITESPACE_RE = re.compile(r"[ \t\u00A0]+")
+
+def uqd_clean_string(value: Any) -> str:
+    """Clean any value and return a safe string for key::value pairs."""
+
+    # Handle None / NaN explicitly
+    if value is None:
+        return ""
+
+    if isinstance(value, float):
+        # catches NaN and real numbers
+        if pd.isna(value):
+            return ""
+        value = str(value)
+
+    if not isinstance(value, str):
+        value = str(value)
+
+    s = value
+
+    # Normalize line breaks / separators
+    s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+    s = s.replace("\u2028", " ").replace("\u2029", " ")
+    s = s.replace("\u200e", "").replace("\u200f", "")
+
+    # Drop control chars
+    s = _CONTROL_CHARS_RE.sub("", s)
+
+    # Normalize whitespace
+    s = _WHITESPACE_RE.sub(" ", s).strip()
+
+    # Remove surrounding quotes only if they wrap the whole string
+    if len(s) >= 2 and ((s[0] == s[-1] == '"') or (s[0] == s[-1] == "'")):
+        s = s[1:-1].strip()
+
+    return s
+
 def uqd_format_value(value):
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+
     if isinstance(value, list):
-        flattened_value = ",".join(map(str, value))  # Convert list to comma-separated string
-        return flattened_value
-    elif isinstance(value, dict):
-        flattened_value = json.dumps(value, separators=(',', ':'))  # Convert dict to JSON string
-        return flattened_value
-    return str(value) # Default case
+        return ",".join(uqd_clean_string(v) for v in value)
+
+    if isinstance(value, dict):
+        cleaned = {
+            k: uqd_clean_string(v) if isinstance(v, str) else v
+            for k, v in value.items()
+        }
+        return json.dumps(cleaned, ensure_ascii=False, separators=(",", ":"))
+
+    return uqd_clean_string(value)
 
 
 # Extract labels to a list from JSON string
